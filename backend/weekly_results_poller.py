@@ -491,15 +491,15 @@ def main():
     logger.info("Starting Mentone Hockey Club fixture poller")
 
     try:
-        # Get all Mentone teams
+        ## Get all Mentone teams
         mentone_teams = {}
-        team_query = db.collection("teams").where("club", "==", "Mentone").stream()
+        team_query = db.collection("teams").where("club_id", "==", "mentone").stream()
 
         for doc in team_query:
             team_data = doc.to_dict()
             team_data["id"] = doc.id  # Ensure ID is included
             mentone_teams[team_data["name"]] = team_data
-            logger.debug(f"Found team: {team_data['name']} (ID: {doc.id}, Fixture: {team_data.get('fixture_id')})")
+        logger.debug(f"Found team: {team_data['name']} (ID: {doc.id}, Fixture: {team_data.get('fixture_id')})")
 
         logger.info(f"Found {len(mentone_teams)} Mentone teams")
 
@@ -556,7 +556,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 # Initialize Firebase
 try:
-    cred = credentials.Certificate("../secrets/serviceAccountKey.json")
+    cred = credentials.Certificate("./secrets/serviceAccountKey.json")
     firebase_admin.initialize_app(cred)
 except ValueError:
     # App already initialized
