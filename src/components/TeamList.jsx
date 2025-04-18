@@ -6,7 +6,7 @@ const TeamList = () => {
     const [teams, setTeams] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [filter, setFilter] = useState("all"); // all, Senior, Junior, or Midweek
+    const [filter, setFilter] = useState("all");
 
     useEffect(() => {
         const fetchTeams = async () => {
@@ -33,7 +33,6 @@ const TeamList = () => {
                     ...doc.data()
                 }));
 
-                // Sort by gender, then by type, then by name
                 teamsData.sort((a, b) => {
                     if (a.gender !== b.gender) {
                         return a.gender.localeCompare(b.gender);
@@ -57,58 +56,32 @@ const TeamList = () => {
     }, [filter]);
 
     if (loading) {
-        return <div className="text-center p-4">Loading teams...</div>;
+        return <div className="text-center p-4 text-[var(--color-info)]">Loading teams...</div>;
     }
 
     if (error) {
-        return <div className="text-red-600 p-4">Error: {error}</div>;
+        return <div className="text-red-500 p-4">Error: {error}</div>;
     }
 
     return (
-        <div className="p-4">
+        <div className="p-4 bg-[var(--color-dark)] min-h-screen text-[var(--color-light)]">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-blue-600">Mentone Teams</h2>
+                <h2 className="text-3xl font-bold text-[var(--color-accent)]">Mentone Teams</h2>
                 <div className="flex gap-2">
-                    <button
-                        onClick={() => setFilter("all")}
-                        className={`px-4 py-2 rounded-lg ${
-                            filter === "all"
-                                ? "bg-blue-600 text-white"
-                                : "bg-gray-200 text-gray-800"
-                        }`}
-                    >
-                        All
-                    </button>
-                    <button
-                        onClick={() => setFilter("Senior")}
-                        className={`px-4 py-2 rounded-lg ${
-                            filter === "Senior"
-                                ? "bg-blue-600 text-white"
-                                : "bg-gray-200 text-gray-800"
-                        }`}
-                    >
-                        Senior
-                    </button>
-                    <button
-                        onClick={() => setFilter("Junior")}
-                        className={`px-4 py-2 rounded-lg ${
-                            filter === "Junior"
-                                ? "bg-blue-600 text-white"
-                                : "bg-gray-200 text-gray-800"
-                        }`}
-                    >
-                        Junior
-                    </button>
-                    <button
-                        onClick={() => setFilter("Midweek")}
-                        className={`px-4 py-2 rounded-lg ${
-                            filter === "Midweek"
-                                ? "bg-blue-600 text-white"
-                                : "bg-gray-200 text-gray-800"
-                        }`}
-                    >
-                        Midweek
-                    </button>
+                    {["all", "Senior", "Junior", "Midweek"].map(type => (
+                        <button
+                            key={type}
+                            onClick={() => setFilter(type)}
+                            className={`px-4 py-2 rounded-md font-semibold border 
+                            ${
+                                filter === type
+                                    ? "bg-[var(--color-primary)] text-white border-transparent"
+                                    : "bg-[var(--color-light)] text-[var(--color-primary)] border-[var(--color-primary)]"
+                            }`}
+                        >
+                            {type}
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -119,25 +92,25 @@ const TeamList = () => {
                     {teams.map((team) => (
                         <div
                             key={team.id}
-                            className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200"
+                            className="bg-[var(--color-light)] text-[var(--color-primary)] rounded-lg shadow-lg overflow-hidden border border-[var(--color-muted)]"
                         >
                             <div
                                 className={`h-2 ${
                                     team.gender === "Men"
-                                        ? "bg-blue-600"
+                                        ? "bg-[var(--color-men)]"
                                         : team.gender === "Women"
-                                            ? "bg-pink-500"
-                                            : "bg-purple-500"
+                                            ? "bg-[var(--color-women)]"
+                                            : "bg-[var(--color-unknown)]"
                                 }`}
                             ></div>
                             <div className="p-4">
-                                <h3 className="font-bold text-lg mb-2">{team.name}</h3>
-                                <div className="flex justify-between text-sm text-gray-600">
+                                <h3 className="font-bold text-lg mb-1">{team.name}</h3>
+                                <div className="flex justify-between text-sm text-gray-600 mb-3">
                                     <span>{team.type}</span>
                                     <span>{team.gender}</span>
                                 </div>
-                                <div className="mt-4 flex justify-end">
-                                    <button className="bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                                <div className="flex justify-end">
+                                    <button className="bg-[var(--color-accent)] text-black px-4 py-1 rounded hover:bg-yellow-400 font-medium">
                                         View Schedule
                                     </button>
                                 </div>
