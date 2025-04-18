@@ -1,3 +1,16 @@
+# fresh_start.py
+#
+# Purpose: Complete database reset/initialization
+# Key functions:
+#
+# Deletes all existing Firestore collections
+# Creates base structure for clubs, competitions, grades, teams
+# Generates sample players and games
+#
+#
+# Use case: Emergency reset or initial setup
+
+
 import firebase_admin
 from firebase_admin import credentials, firestore
 import requests

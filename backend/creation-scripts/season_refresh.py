@@ -1,3 +1,12 @@
+#   Purpose: Updates team data for a new season
+#
+#       Key functions:
+#           Archives old teams (marks as inactive)
+#           Discovers current competitions from Hockey Victoria
+#           Creates new teams for current season
+#           Maintains existing structure
+
+
 import firebase_admin
 from firebase_admin import credentials, firestore
 import requests

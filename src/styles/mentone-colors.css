@@ -1,0 +1,11 @@
+:root {
+    /* Mentone Hockey Club Colors */
+    --mentone-gold: #FFD700;      /* Uniform stripes, player sponsor posters, logo */
+    --mentone-navy: #1B1F4A;      /* Main uniform colour, poster background */
+    --mentone-skyblue: #4A90E2;   /* Turf field and accents */
+    --mentone-charcoal: #4A4A4A;  /* Typography and border detail on posters */
+    --mentone-yellow: #F9E547;    /* Banner heading and alternate kit accents */
+    --mentone-grey: #C0C0C0;      /* Background tones from sponsor flyer */
+    --mentone-green: #2C8C57;     /* Synthetic turf field */
+    --mentone-offwhite: #F4F4F4;  /* Contrast colour for clean layouts and text areas */
+}
