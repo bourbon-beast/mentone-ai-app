@@ -1,30 +1,43 @@
-import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
+import { useState, useEffect } from "react";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
 
 const TeamList = () => {
     const [teams, setTeams] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('all'); // 'all', 'Senior', 'Junior', 'Midweek'
-    const [genderFilter, setGenderFilter] = useState('all'); // 'all', 'Men', 'Women'
+    const [error, setError] = useState(null);
+    const [filter, setFilter] = useState("all"); // all, Senior, Junior, or Midweek
 
     useEffect(() => {
         const fetchTeams = async () => {
             try {
                 setLoading(true);
+                let teamsQuery;
 
-                // Base query for Mentone teams
-                let q = query(collection(db, "teams"), where("club", "==", "Mentone"));
+                if (filter === "all") {
+                    teamsQuery = query(
+                        collection(db, "teams"),
+                        where("is_home_club", "==", true)
+                    );
+                } else {
+                    teamsQuery = query(
+                        collection(db, "teams"),
+                        where("is_home_club", "==", true),
+                        where("type", "==", filter)
+                    );
+                }
 
-                const querySnapshot = await getDocs(q);
-                const teamsData = [];
+                const querySnapshot = await getDocs(teamsQuery);
+                const teamsData = querySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
 
-                querySnapshot.forEach((doc) => {
-                    teamsData.push({ id: doc.id, ...doc.data() });
-                });
-
-                // Sort teams by type and then by name
+                // Sort by gender, then by type, then by name
                 teamsData.sort((a, b) => {
+                    if (a.gender !== b.gender) {
+                        return a.gender.localeCompare(b.gender);
+                    }
                     if (a.type !== b.type) {
                         return a.type.localeCompare(b.type);
                     }
@@ -33,131 +46,104 @@ const TeamList = () => {
 
                 setTeams(teamsData);
                 setLoading(false);
-            } catch (error) {
-                console.error("Error fetching teams:", error);
+            } catch (err) {
+                console.error("Error fetching teams:", err);
+                setError(err.message);
                 setLoading(false);
             }
         };
 
         fetchTeams();
-    }, []);
+    }, [filter]);
 
-    // Filter teams based on current filters
-    const filteredTeams = teams.filter(team => {
-        // Type filter
-        if (filter !== 'all' && team.type !== filter) {
-            return false;
-        }
+    if (loading) {
+        return <div className="text-center p-4">Loading teams...</div>;
+    }
 
-        // Gender filter
-        if (genderFilter !== 'all' && team.gender !== genderFilter) {
-            return false;
-        }
-
-        return true;
-    });
-
-    // Get unique types for filter options
-    const types = ['all', ...new Set(teams.map(team => team.type))];
-    const genders = ['all', ...new Set(teams.map(team => team.gender))];
+    if (error) {
+        return <div className="text-red-600 p-4">Error: {error}</div>;
+    }
 
     return (
-        <div className="bg-white shadow rounded-lg p-6 w-full max-w-6xl mx-auto">
+        <div className="p-4">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-blue-900">Mentone Hockey Club Teams</h2>
-
-                <div className="flex space-x-4">
-                    {/* Type filter */}
-                    <select
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value)}
-                        className="bg-white border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <h2 className="text-2xl font-bold text-blue-600">Mentone Teams</h2>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setFilter("all")}
+                        className={`px-4 py-2 rounded-lg ${
+                            filter === "all"
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-200 text-gray-800"
+                        }`}
                     >
-                        {types.map(type => (
-                            <option key={type} value={type}>
-                                {type === 'all' ? 'All Types' : type}
-                            </option>
-                        ))}
-                    </select>
-
-                    {/* Gender filter */}
-                    <select
-                        value={genderFilter}
-                        onChange={(e) => setGenderFilter(e.target.value)}
-                        className="bg-white border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        All
+                    </button>
+                    <button
+                        onClick={() => setFilter("Senior")}
+                        className={`px-4 py-2 rounded-lg ${
+                            filter === "Senior"
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-200 text-gray-800"
+                        }`}
                     >
-                        {genders.map(gender => (
-                            <option key={gender} value={gender}>
-                                {gender === 'all' ? 'All Genders' : gender}
-                            </option>
-                        ))}
-                    </select>
+                        Senior
+                    </button>
+                    <button
+                        onClick={() => setFilter("Junior")}
+                        className={`px-4 py-2 rounded-lg ${
+                            filter === "Junior"
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-200 text-gray-800"
+                        }`}
+                    >
+                        Junior
+                    </button>
+                    <button
+                        onClick={() => setFilter("Midweek")}
+                        className={`px-4 py-2 rounded-lg ${
+                            filter === "Midweek"
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-200 text-gray-800"
+                        }`}
+                    >
+                        Midweek
+                    </button>
                 </div>
             </div>
 
-            {loading ? (
-                <div className="flex justify-center items-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700"></div>
-                </div>
+            {teams.length === 0 ? (
+                <div className="text-center p-4">No teams found</div>
             ) : (
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-blue-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                                Team Name
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                                Type
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                                Gender
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                                Competition
-                            </th>
-                        </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredTeams.length > 0 ? (
-                            filteredTeams.map((team) => (
-                                <tr key={team.id} className="hover:bg-blue-50">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                        {team.name}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          team.type === 'Senior' ? 'bg-blue-100 text-blue-800' :
-                              team.type === 'Junior' ? 'bg-green-100 text-green-800' :
-                                  team.type === 'Midweek' ? 'bg-purple-100 text-purple-800' :
-                                      'bg-gray-100 text-gray-800'
-                      }`}>
-                        {team.type}
-                      </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          team.gender === 'Men' ? 'bg-indigo-100 text-indigo-800' :
-                              team.gender === 'Women' ? 'bg-pink-100 text-pink-800' :
-                                  'bg-gray-100 text-gray-800'
-                      }`}>
-                        {team.gender}
-                      </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {team.comp_name || "Unknown"}
-                                    </td>
-                                </tr>
-                            ))
-                        ) : (
-                            <tr>
-                                <td colSpan="4" className="px-6 py-4 text-center text-sm font-medium text-gray-500">
-                                    No teams found matching your filters
-                                </td>
-                            </tr>
-                        )}
-                        </tbody>
-                    </table>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {teams.map((team) => (
+                        <div
+                            key={team.id}
+                            className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200"
+                        >
+                            <div
+                                className={`h-2 ${
+                                    team.gender === "Men"
+                                        ? "bg-blue-600"
+                                        : team.gender === "Women"
+                                            ? "bg-pink-500"
+                                            : "bg-purple-500"
+                                }`}
+                            ></div>
+                            <div className="p-4">
+                                <h3 className="font-bold text-lg mb-2">{team.name}</h3>
+                                <div className="flex justify-between text-sm text-gray-600">
+                                    <span>{team.type}</span>
+                                    <span>{team.gender}</span>
+                                </div>
+                                <div className="mt-4 flex justify-end">
+                                    <button className="bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                                        View Schedule
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
