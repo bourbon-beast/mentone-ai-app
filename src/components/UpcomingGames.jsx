@@ -214,9 +214,7 @@ const UpcomingGames = () => {
                                                     <span className="text-yellow-300 font-bold">
                                                         {competitionName}
                                                     </span>
-                                                    <span className="text-sm bg-gray-700 text-gray-300 px-2 py-1 rounded">
-                                                        Round {game.round || "?"}
-                                                    </span>
+
                                                 </div>
 
                                                 {/* 2. Time and venue on second line */}
