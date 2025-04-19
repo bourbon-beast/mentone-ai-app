@@ -56,7 +56,7 @@ const TeamList = () => {
     }, [filter]);
 
     if (loading) {
-        return <div className="text-center p-4 text-[var(--color-info)]">Loading teams...</div>;
+        return <div className="text-center p-4">Loading teams...</div>;
     }
 
     if (error) {
@@ -64,54 +64,73 @@ const TeamList = () => {
     }
 
     return (
-        <div className="p-4 bg-[var(--color-dark)] min-h-screen text-[var(--color-light)]">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold text-[var(--color-accent)]">Mentone Teams</h2>
-                <div className="flex gap-2">
+        <div className="p-6 bg-white">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-blue-900 mb-4 md:mb-0">Mentone Teams</h2>
+                <div className="flex gap-2 flex-wrap">
                     {["all", "Senior", "Junior", "Midweek"].map(type => (
                         <button
                             key={type}
                             onClick={() => setFilter(type)}
-                            className={`px-4 py-2 rounded-md font-semibold border 
+                            className={`px-4 py-2 rounded-md font-semibold 
                             ${
                                 filter === type
-                                    ? "bg-[var(--color-primary)] text-white border-transparent"
-                                    : "bg-[var(--color-light)] text-[var(--color-primary)] border-[var(--color-primary)]"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-100 text-gray-800 border border-blue-500 hover:bg-blue-100"
                             }`}
                         >
-                            {type}
+                            {type === "all" ? "All Teams" : type}
                         </button>
                     ))}
                 </div>
             </div>
 
             {teams.length === 0 ? (
-                <div className="text-center p-4">No teams found</div>
+                <div className="text-center p-6 bg-gray-100 rounded-lg border border-gray-300">
+                    <p className="text-gray-700 text-lg">No teams found matching the selected filter</p>
+                </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {teams.map((team) => (
                         <div
                             key={team.id}
-                            className="bg-[var(--color-light)] text-[var(--color-primary)] rounded-lg shadow-lg overflow-hidden border border-[var(--color-muted)]"
+                            className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden"
                         >
                             <div
                                 className={`h-2 ${
                                     team.gender === "Men"
-                                        ? "bg-[var(--color-men)]"
+                                        ? "bg-blue-900"
                                         : team.gender === "Women"
-                                            ? "bg-[var(--color-women)]"
-                                            : "bg-[var(--color-unknown)]"
+                                            ? "bg-blue-500"
+                                            : "bg-green-500"
                                 }`}
                             ></div>
                             <div className="p-4">
-                                <h3 className="font-bold text-lg mb-1">{team.name}</h3>
-                                <div className="flex justify-between text-sm text-gray-600 mb-3">
-                                    <span>{team.type}</span>
-                                    <span>{team.gender}</span>
+                                <h3 className="font-bold text-lg mb-2 text-blue-900 truncate" title={team.name}>
+                                    {team.name}
+                                </h3>
+                                <div className="flex justify-between text-sm text-gray-700 mb-4">
+                                    <span className="bg-gray-100 px-2 py-1 rounded text-xs font-medium">
+                                        {team.type}
+                                    </span>
+                                    <span className={`px-2 py-1 rounded text-xs font-medium text-white
+                                        ${team.gender === "Men"
+                                        ? "bg-blue-900"
+                                        : team.gender === "Women"
+                                            ? "bg-blue-500"
+                                            : "bg-green-500"}`}>
+                                        {team.gender}
+                                    </span>
                                 </div>
-                                <div className="flex justify-end">
-                                    <button className="bg-[var(--color-accent)] text-black px-4 py-1 rounded hover:bg-yellow-400 font-medium">
-                                        View Schedule
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-500">
+                                        {team.comp_name ? team.comp_name.split(" - ")[0] : ""}
+                                    </span>
+                                    <button className="bg-yellow-400 text-blue-900 px-4 py-1 rounded hover:bg-yellow-300 font-medium text-sm flex items-center gap-1">
+                                        <span>View Team</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
                                     </button>
                                 </div>
                             </div>
