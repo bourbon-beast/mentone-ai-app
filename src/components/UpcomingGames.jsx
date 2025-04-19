@@ -40,28 +40,50 @@ const UpcomingGames = () => {
         fetchData();
     }, [dateFilter]);
 
+    // Get current round date range (Friday to Wednesday)
+    const getRoundDateRange = (weekOffset = 0) => {
+        const now = new Date();
+        const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 5 = Friday, 6 = Saturday
+
+        // Determine the most recent Friday
+        const daysToLastFriday = currentDay >= 5 ? currentDay - 5 : currentDay + 2;
+        const lastFriday = new Date(now);
+        lastFriday.setDate(now.getDate() - daysToLastFriday + (weekOffset * 7));
+        lastFriday.setHours(0, 0, 0, 0);
+
+        // Set the end date to the upcoming Wednesday
+        const nextWednesday = new Date(lastFriday);
+        nextWednesday.setDate(lastFriday.getDate() + 5); // 5 days after Friday is Wednesday
+        nextWednesday.setHours(23, 59, 59, 999);
+
+        return { startDate: lastFriday, endDate: nextWednesday };
+    };
+
     // Separate function to fetch games
     const fetchUpcomingGames = async (filter) => {
         try {
-            // Get current date at midnight
-            const now = new Date();
-            now.setHours(0, 0, 0, 0);
+            let dateRange;
 
-            // Calculate end date based on filter
-            const endDate = new Date(now);
+            // Calculate date range based on filter
             if (filter === "thisWeek") {
-                endDate.setDate(now.getDate() + 7);
+                dateRange = getRoundDateRange(0); // Current round
             } else if (filter === "nextWeek") {
-                now.setDate(now.getDate() + 7);
-                endDate.setDate(now.getDate() + 7);
+                dateRange = getRoundDateRange(1); // Next round
             } else if (filter === "twoWeeks") {
-                endDate.setDate(now.getDate() + 14);
+                // For "Two Weeks", we'll show from current round start to next round end
+                const currentRound = getRoundDateRange(0);
+                const nextRound = getRoundDateRange(1);
+
+                dateRange = {
+                    startDate: currentRound.startDate,
+                    endDate: nextRound.endDate
+                };
             }
 
             const gamesQuery = query(
                 collection(db, "games"),
-                where("date", ">=", now),
-                where("date", "<=", endDate),
+                where("date", ">=", dateRange.startDate),
+                where("date", "<=", dateRange.endDate),
                 orderBy("date", "asc"),
                 limit(20)
             );
@@ -77,6 +99,34 @@ const UpcomingGames = () => {
             console.error("Error fetching upcoming games:", err);
             setError(err.message);
         }
+    };
+
+    // Get human-readable date range for filter
+    const getFilterDateRangeText = (filter) => {
+        let dateRange;
+
+        if (filter === "thisWeek") {
+            dateRange = getRoundDateRange(0);
+        } else if (filter === "nextWeek") {
+            dateRange = getRoundDateRange(1);
+        } else if (filter === "twoWeeks") {
+            const currentRound = getRoundDateRange(0);
+            const nextRound = getRoundDateRange(1);
+
+            dateRange = {
+                startDate: currentRound.startDate,
+                endDate: nextRound.endDate
+            };
+        }
+
+        const formatDate = (date) => {
+            return date.toLocaleDateString('en-AU', {
+                day: 'numeric',
+                month: 'short'
+            });
+        };
+
+        return `${formatDate(dateRange.startDate)} - ${formatDate(dateRange.endDate)}`;
     };
 
     // Get competition name by fixture ID
@@ -167,9 +217,9 @@ const UpcomingGames = () => {
 
                 <div className="bg-mentone-navy/50 backdrop-blur-sm rounded-lg p-1 flex">
                     {[
-                        { value: "thisWeek", label: "This Week" },
-                        { value: "nextWeek", label: "Next Week" },
-                        { value: "twoWeeks", label: "Two Weeks" }
+                        { value: "thisWeek", label: "This Round" },
+                        { value: "nextWeek", label: "Next Round" },
+                        { value: "twoWeeks", label: "Two Rounds" }
                     ].map((filter) => (
                         <button
                             key={filter.value}
@@ -184,6 +234,13 @@ const UpcomingGames = () => {
                         </button>
                     ))}
                 </div>
+            </div>
+
+            {/* Date range indicator */}
+            <div className="bg-mentone-navy/5 px-5 py-2 border-b border-gray-100">
+                <p className="text-mentone-navy text-sm font-medium">
+                    Showing games: {getFilterDateRangeText(dateFilter)}
+                </p>
             </div>
 
             {/* Game listings */}
@@ -231,17 +288,7 @@ const UpcomingGames = () => {
                                 Round {game.round}
                               </span>
                                                         )}
-                                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                                            competitionName.includes("Premier")
-                                                                ? "bg-mentone-navy text-white"
-                                                                : competitionName.includes("Pennant") || competitionName.includes("Vic League")
-                                                                    ? "bg-mentone-skyblue text-white"
-                                                                    : competitionName.includes("Metro")
-                                                                        ? "bg-mentone-green/70 text-white"
-                                                                        : "bg-gray-200 text-gray-700"
-                                                        }`}>
-                              {competitionName.includes("Men") ? "Men" : competitionName.includes("Women") ? "Women" : "Mixed"}
-                            </span>
+
                                                     </div>
                                                 </div>
 
@@ -250,18 +297,10 @@ const UpcomingGames = () => {
                                                     <div className="flex items-center justify-between mb-5">
                                                         {/* Home Team */}
                                                         <div className="flex flex-col items-center w-5/12">
-                                                            <div className={`w-12 h-12 flex items-center justify-center mb-2 ${
-                                                                isMentoneHome
-                                                                    ? "bg-mentone-navy text-white rounded-full"
-                                                                    : "bg-gray-100 text-gray-600 rounded-full"
-                                                            }`}>
-                                <span className={isMentoneHome ? "text-white font-bold" : "text-gray-600 font-medium"}>
-                                  {(game.home_team?.name || "TBD").substring(0, 1)}
-                                </span>
-                                                            </div>
+
                                                             <span className={`text-center font-medium ${isMentoneHome ? "text-mentone-skyblue" : "text-gray-700"}`}>
-                                {isMentoneHome ? "Mentone" : game.home_team?.name || "TBD"}
-                              </span>
+                                                                {isMentoneHome ? "Mentone" : game.home_team?.name || "TBD"}
+                                                            </span>
                                                         </div>
 
                                                         {/* VS */}
@@ -271,18 +310,10 @@ const UpcomingGames = () => {
 
                                                         {/* Away Team */}
                                                         <div className="flex flex-col items-center w-5/12">
-                                                            <div className={`w-12 h-12 flex items-center justify-center mb-2 ${
-                                                                isMentoneAway
-                                                                    ? "bg-mentone-navy text-white rounded-full"
-                                                                    : "bg-gray-100 text-gray-600 rounded-full"
-                                                            }`}>
-                                <span className={isMentoneAway ? "text-white font-bold" : "text-gray-600 font-medium"}>
-                                  {(game.away_team?.name || "TBD").substring(0, 1)}
-                                </span>
-                                                            </div>
+
                                                             <span className={`text-center font-medium ${isMentoneAway ? "text-mentone-skyblue" : "text-gray-700"}`}>
-                                {isMentoneAway ? "Mentone" : game.away_team?.name || "TBD"}
-                              </span>
+                                                                {isMentoneAway ? "Mentone" : game.away_team?.name || "TBD"}
+                                                            </span>
                                                         </div>
                                                     </div>
 
