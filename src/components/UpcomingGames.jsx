@@ -23,7 +23,6 @@ const UpcomingGames = () => {
                 gradesSnapshot.forEach(doc => {
                     const data = doc.data();
                     gradesMap[doc.id] = data;
-
                 });
 
                 setGradeData(gradesMap);
@@ -83,18 +82,17 @@ const UpcomingGames = () => {
 
     // Get competition name by fixture ID
     const getCompetitionName = (game, team) => {
-        // First try to extract from team name - format: "Mentone - Competition Name"
         if (team?.name && team.name.includes(" - ")) {
-            return team.name.split(" - ")[1];
+            const compName = team.name.split(" - ")[1];
+            return compName.replace(/ - \d{4}$/, "");
         }
 
-        // If that fails, try to get grade name from our grade data lookup
         const fixtureId = game.fixture_id;
         if (fixtureId && gradeData[fixtureId]) {
-            return gradeData[fixtureId].name;
+            const gradeName = gradeData[fixtureId].name;
+            return gradeName.replace(/ - \d{4}$/, "");
         }
 
-        // Last resort, just show the fixture ID
         return `Grade ${fixtureId}`;
     };
 
@@ -134,7 +132,7 @@ const UpcomingGames = () => {
     };
 
     if (loading) {
-        return <div className="text-center p-4 text-white">Loading upcoming games...</div>;
+        return <div className="text-center p-4 text-mentone-offwhite">Loading upcoming games...</div>;
     }
 
     if (error) {
@@ -144,38 +142,41 @@ const UpcomingGames = () => {
     const groupedGames = groupGamesByDate();
 
     return (
-        <div className="p-4">
+        <div className="p-4 bg-mentone-navy rounded-lg">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-white">Upcoming Games</h2>
+                <h2 className="text-2xl font-bold text-mentone-gold">Upcoming Games</h2>
 
                 <div className="flex space-x-1">
                     <button
                         onClick={() => setDateFilter("thisWeek")}
-                        className={`px-3 py-1 text-sm rounded ${
+                        className={`px-3 py-1 text-sm rounded transition-colors ${
                             dateFilter === "thisWeek"
-                                ? "bg-blue-700 text-white"
-                                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                ? "bg-mentone-skyblue text-mentone-offwhite"
+                                : "bg-mentone-navy text-mentone-offwhite hover:bg-mentone-skyblue hover:bg-opacity-70"
                         }`}
+                        style={{backgroundColor: dateFilter === "thisWeek" ? "#4A90E2" : "#1B1F4A"}}
                     >
                         This Week
                     </button>
                     <button
                         onClick={() => setDateFilter("nextWeek")}
-                        className={`px-3 py-1 text-sm rounded ${
+                        className={`px-3 py-1 text-sm rounded transition-colors ${
                             dateFilter === "nextWeek"
-                                ? "bg-blue-700 text-white"
-                                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                ? "bg-mentone-skyblue text-mentone-offwhite"
+                                : "bg-mentone-navy text-mentone-offwhite hover:bg-mentone-skyblue hover:bg-opacity-70"
                         }`}
+                        style={{backgroundColor: dateFilter === "nextWeek" ? "#4A90E2" : "#1B1F4A"}}
                     >
                         Next Week
                     </button>
                     <button
                         onClick={() => setDateFilter("twoWeeks")}
-                        className={`px-3 py-1 text-sm rounded ${
+                        className={`px-3 py-1 text-sm rounded transition-colors ${
                             dateFilter === "twoWeeks"
-                                ? "bg-blue-700 text-white"
-                                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                ? "bg-mentone-skyblue text-mentone-offwhite"
+                                : "bg-mentone-navy text-mentone-offwhite hover:bg-mentone-skyblue hover:bg-opacity-70"
                         }`}
+                        style={{backgroundColor: dateFilter === "twoWeeks" ? "#4A90E2" : "#1B1F4A"}}
                     >
                         Two Weeks
                     </button>
@@ -183,112 +184,73 @@ const UpcomingGames = () => {
             </div>
 
             {games.length === 0 ? (
-                <div className="text-center p-6 bg-gray-800 rounded-lg border border-gray-700">
-                    <p className="text-gray-400">No upcoming games scheduled for this period</p>
+                <div className="text-center p-6 bg-mentone-charcoal bg-opacity-50 rounded-lg border border-mentone-skyblue"
+                     style={{backgroundColor: "#4A4A4A", borderColor: "#4A90E2"}}>
+                    <p className="text-mentone-offwhite" style={{color: "#F4F4F4"}}>No upcoming games scheduled for this period</p>
                 </div>
             ) : (
                 <div className="space-y-8">
                     {Object.entries(groupedGames).map(([date, dateGames]) => (
                         <div key={date} className="space-y-2">
-                            <h3 className="text-lg font-semibold text-white border-b border-gray-700 pb-2">
+                            <h3 className="text-lg font-semibold text-mentone-yellow border-b border-mentone-skyblue pb-2"
+                                style={{color: "#F9E547", borderColor: "#4A90E2"}}>
                                 {date}
                             </h3>
 
                             <div className="space-y-2">
                                 {dateGames.map((game) => {
-                                    // Determine which team is Mentone
                                     const isMentoneHome = game.home_team?.club?.toLowerCase() === "mentone";
                                     const isMentoneAway = game.away_team?.club?.toLowerCase() === "mentone";
-
-                                    // Get the competition name from the Mentone team
                                     const mentoneTeam = isMentoneHome ? game.home_team : game.away_team;
                                     const competitionName = mentoneTeam ? getCompetitionName(game, mentoneTeam) : "";
 
                                     return (
                                         <div
                                             key={game.id}
-                                            className="border border-gray-700 rounded overflow-hidden"
+                                            className="border border-mentone-skyblue rounded-md overflow-hidden bg-mentone-charcoal bg-opacity-30 hover:bg-opacity-40 transition-colors"
+                                            style={{borderColor: "#4A90E2", backgroundColor: "#4A4A4A"}}
                                         >
                                             <div className="p-4">
-                                                {/* 1. Competition name at the top */}
-                                                <div className="flex justify-between items-center mb-3">
-                                                    <span className="text-yellow-300 font-bold">
+                                                {/* Competition name */}
+                                                <div className="flex justify-center mb-3">
+                                                    <span className="text-mentone-gold font-bold" style={{color: "#FFD700"}}>
                                                         {competitionName}
                                                     </span>
-
                                                 </div>
 
-                                                {/* 2. Time and venue on second line */}
-                                                <div className="flex items-center text-gray-400 text-sm mb-3">
-                                                    <div className="flex items-center mr-4">
-                                                        <svg
-                                                            xmlns="http://www.w3.org/2000/svg"
-                                                            width="14"
-                                                            height="14"
-                                                            viewBox="0 0 24 24"
-                                                            fill="none"
-                                                            stroke="currentColor"
-                                                            strokeWidth="2"
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            className="mr-1"
-                                                        >
-                                                            <circle cx="12" cy="12" r="10"></circle>
-                                                            <polyline points="12 6 12 12 16 14"></polyline>
-                                                        </svg>
-                                                        <span>{formatGameTime(game.date)}</span>
+                                                {/* Time and venue */}
+                                                <div className="flex justify-between text-mentone-grey text-sm mb-3">
+                                                    <div className="flex items-center gap-1">
+                                                        🕒 <span>{formatGameTime(game.date)}</span>
                                                     </div>
-
-                                                    <div className="flex items-center">
-                                                        <svg
-                                                            xmlns="http://www.w3.org/2000/svg"
-                                                            width="14"
-                                                            height="14"
-                                                            viewBox="0 0 24 24"
-                                                            fill="none"
-                                                            stroke="currentColor"
-                                                            strokeWidth="2"
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            className="mr-1"
-                                                        >
-                                                            <circle cx="12" cy="10" r="3"></circle>
-                                                            <path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 6.9 8 11.7z"></path>
-                                                        </svg>
-                                                        <span>{game.venue || "Venue TBD"}</span>
+                                                    <div className="flex items-center gap-1">
+                                                        📍 <span>{game.venue || "Venue TBD"}</span>
                                                     </div>
                                                 </div>
 
-                                                {/* 3. Home and away team on third line */}
-                                                <div className="flex items-center justify-between">
-                                                    {/* Home Team */}
-                                                    <div className="flex flex-col items-start w-5/12">
-                                                        <span className={`font-bold ${
-                                                            isMentoneHome
-                                                                ? "text-blue-400"
-                                                                : "text-white"
-                                                        }`}>
-                                                            {isMentoneHome
-                                                                ? "Mentone"
-                                                                : game.home_team?.name || "TBD"}
+                                                {/* Teams */}
+                                                <div className="flex items-center justify-between text-sm">
+                                                    <div className="w-5/12 text-right pr-2">
+                                                        <span
+                                                            style={{
+                                                                color: isMentoneHome ? "#4A90E2" : "#F4F4F4",
+                                                                fontWeight: "bold"
+                                                            }}
+                                                        >
+                                                            {isMentoneHome ? "Mentone" : game.home_team?.name || "TBD"}
                                                         </span>
                                                     </div>
-
-                                                    {/* VS */}
-                                                    <div className="flex items-center w-2/12 justify-center">
-                                                        <span className="text-gray-400 text-sm font-medium">vs</span>
+                                                    <div className="w-2/12 text-center">
+                                                        <span style={{color: "#C0C0C0"}} className="text-sm font-medium">vs</span>
                                                     </div>
-
-                                                    {/* Away Team */}
-                                                    <div className="flex flex-col items-end w-5/12">
-                                                        <span className={`font-bold text-right ${
-                                                            isMentoneAway
-                                                                ? "text-blue-400"
-                                                                : "text-white"
-                                                        }`}>
-                                                            {isMentoneAway
-                                                                ? "Mentone"
-                                                                : game.away_team?.name || "TBD"}
+                                                    <div className="w-5/12 text-left pl-2">
+                                                        <span
+                                                            style={{
+                                                                color: isMentoneAway ? "#4A90E2" : "#F4F4F4",
+                                                                fontWeight: "bold"
+                                                            }}
+                                                        >
+                                                            {isMentoneAway ? "Mentone" : game.away_team?.name || "TBD"}
                                                         </span>
                                                     </div>
                                                 </div>
