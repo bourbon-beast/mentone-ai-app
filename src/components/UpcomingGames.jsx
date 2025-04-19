@@ -23,6 +23,7 @@ const UpcomingGames = () => {
                 gradesSnapshot.forEach(doc => {
                     const data = doc.data();
                     gradesMap[doc.id] = data;
+
                 });
 
                 setGradeData(gradesMap);
