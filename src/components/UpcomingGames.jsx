@@ -12,6 +12,49 @@ const UpcomingGames = () => {
     const [textCopied, setTextCopied] = useState(false);
     const tableContainerRef = useRef(null);
 
+    // New state for team filtering
+    const [mentoneTeams, setMentoneTeams] = useState([]);
+    const [selectedTeams, setSelectedTeams] = useState([]);
+    const [teamFilterOpen, setTeamFilterOpen] = useState(false);
+
+    // Fetch mentone teams
+    useEffect(() => {
+        const fetchMentoneTeams = async () => {
+            try {
+                // Create a more specific query to ensure we get all active Mentone teams
+                const teamsQuery = query(
+                    collection(db, "teams"),
+                    where("is_home_club", "==", true),
+                    // Use orderBy to sort teams in a useful way
+                    orderBy("type"),
+                    orderBy("name"),
+                    // Increase limit to ensure we get all teams
+                    limit(100)
+                );
+
+                const teamsSnapshot = await getDocs(teamsQuery);
+
+                if (teamsSnapshot.empty) {
+                    console.warn("No Mentone teams found in database");
+                    setMentoneTeams([]);
+                } else {
+                    const teamsData = teamsSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+
+                    console.log(`Loaded ${teamsData.length} Mentone teams`);
+                    setMentoneTeams(teamsData);
+                }
+
+            } catch (err) {
+                console.error("Error fetching Mentone teams:", err);
+            }
+        };
+
+        fetchMentoneTeams();
+    }, []);
+
     // Fetch games and grade data
     useEffect(() => {
         const fetchData = async () => {
@@ -88,7 +131,7 @@ const UpcomingGames = () => {
                 where("date", ">=", dateRange.startDate),
                 where("date", "<=", dateRange.endDate),
                 orderBy("date", "asc"),
-                limit(20)
+                limit(50) // Increased limit to get more games
             );
 
             const querySnapshot = await getDocs(gamesQuery);
@@ -102,6 +145,32 @@ const UpcomingGames = () => {
             console.error("Error fetching upcoming games:", err);
             setError(err.message);
         }
+    };
+
+    // Apply team filters to the games
+    const filteredGames = selectedTeams.length > 0
+        ? games.filter(game => {
+            // Check if any selected team is playing in this game
+            const homeTeamId = game.home_team?.id;
+            const awayTeamId = game.away_team?.id;
+            return selectedTeams.includes(homeTeamId) || selectedTeams.includes(awayTeamId);
+        })
+        : games;
+
+    // Handler for toggling team selection
+    const toggleTeamSelection = (teamId) => {
+        setSelectedTeams(prevSelected => {
+            if (prevSelected.includes(teamId)) {
+                return prevSelected.filter(id => id !== teamId);
+            } else {
+                return [...prevSelected, teamId];
+            }
+        });
+    };
+
+    // Handler for clearing all team selections
+    const clearTeamSelections = () => {
+        setSelectedTeams([]);
     };
 
     // Get human-readable date range for filter
@@ -149,7 +218,6 @@ const UpcomingGames = () => {
     };
 
     // Format date as "Saturday 26 Apr"
-    // Updated formatGameDate function
     const formatGameDate = (date) => {
         if (!date) return "TBD";
 
@@ -182,7 +250,7 @@ const UpcomingGames = () => {
     const groupGamesByDate = () => {
         const grouped = {};
 
-        games.forEach(game => {
+        filteredGames.forEach(game => {
             if (!game.date) return;
 
             const gameDate = game.date.toDate ? game.date.toDate() : new Date(game.date);
@@ -200,7 +268,7 @@ const UpcomingGames = () => {
 
     // Generate HTML table for games
     const generateHTMLTable = () => {
-        if (games.length === 0) return "<p>No upcoming games scheduled for this period.</p>";
+        if (filteredGames.length === 0) return "<p>No upcoming games scheduled for this period.</p>";
 
         const grouped = groupGamesByDate();
         let html = `<div style="font-family: Arial, sans-serif; max-width: 100%;">
@@ -312,6 +380,16 @@ const UpcomingGames = () => {
     const groupedGames = groupGamesByDate();
     const htmlTable = generateHTMLTable();
 
+    // Group teams by type for the filter dropdown
+    const teamsByType = mentoneTeams.reduce((acc, team) => {
+        const type = team.type || "Other";
+        if (!acc[type]) {
+            acc[type] = [];
+        }
+        acc[type].push(team);
+        return acc;
+    }, {});
+
     return (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             {/* Header section */}
@@ -339,11 +417,91 @@ const UpcomingGames = () => {
                 </div>
             </div>
 
-            {/* Date range indicator and view switcher */}
+            {/* Date range indicator, team filter, and view switcher */}
             <div className="bg-mentone-navy/5 px-5 py-2 border-b border-gray-100 flex justify-between items-center">
-                <p className="text-mentone-navy text-sm font-medium">
-                    Showing games: {getFilterDateRangeText(dateFilter)}
-                </p>
+                <div className="flex items-center gap-3">
+                    <p className="text-mentone-navy text-sm font-medium">
+                        Showing games: {getFilterDateRangeText(dateFilter)}
+                    </p>
+
+                    {/* Team filter dropdown */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setTeamFilterOpen(!teamFilterOpen)}
+                            className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors
+                                ${selectedTeams.length > 0
+                                ? "bg-mentone-skyblue text-white border-mentone-skyblue"
+                                : "bg-white text-mentone-navy border-gray-300 hover:border-mentone-skyblue"}
+                            `}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                            </svg>
+                            {selectedTeams.length === 0 ? (
+                                <span>Filter Teams</span>
+                            ) : (
+                                <span>{selectedTeams.length} team{selectedTeams.length !== 1 ? 's' : ''} selected</span>
+                            )}
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${teamFilterOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+
+                        {teamFilterOpen && (
+                            <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg w-72 max-h-96 overflow-y-auto">
+                                <div className="sticky top-0 bg-white px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+                                    <h3 className="text-sm font-semibold text-mentone-navy">Filter by team</h3>
+                                    <button
+                                        onClick={clearTeamSelections}
+                                        className="text-xs text-mentone-skyblue hover:text-mentone-navy"
+                                    >
+                                        Clear all
+                                    </button>
+                                </div>
+
+                                <div className="p-2">
+                                    {Object.keys(teamsByType).length === 0 ? (
+                                        // Show loading or no teams message
+                                        <div className="py-3 px-2 text-sm text-gray-500 text-center">
+                                            Loading teams...
+                                        </div>
+                                    ) : (
+                                        // Show teams grouped by type
+                                        Object.entries(teamsByType).map(([type, typeTeams]) => (
+                                            <div key={type} className="mb-3">
+                                                <h4 className="text-xs font-bold px-2 py-1 bg-gray-100 rounded-md text-mentone-navy mb-1">
+                                                    {type}
+                                                </h4>
+                                                <div className="space-y-1">
+                                                    {typeTeams.map(team => (
+                                                        <div
+                                                            key={team.id}
+                                                            className="flex items-center pl-2"
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                id={`team-${team.id}`}
+                                                                checked={selectedTeams.includes(team.id)}
+                                                                onChange={() => toggleTeamSelection(team.id)}
+                                                                className="h-4 w-4 text-mentone-skyblue rounded border-gray-300 focus:ring-mentone-skyblue"
+                                                            />
+                                                            <label
+                                                                htmlFor={`team-${team.id}`}
+                                                                className="ml-2 text-sm text-gray-700 truncate cursor-pointer flex-1 py-1"
+                                                            >
+                                                                {team.name}
+                                                            </label>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
 
                 {/* View mode toggle */}
                 <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -376,16 +534,56 @@ const UpcomingGames = () => {
                 </div>
             </div>
 
+            {/* Show active filters if teams are selected */}
+            {selectedTeams.length > 0 && (
+                <div className="bg-mentone-skyblue/5 px-5 py-2 border-b border-mentone-skyblue/10">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-mentone-navy">Active filters:</span>
+                        {selectedTeams.map(teamId => {
+                            const team = mentoneTeams.find(t => t.id === teamId);
+                            if (!team) return null;
+
+                            return (
+                                <div
+                                    key={teamId}
+                                    className="bg-mentone-skyblue/10 text-mentone-skyblue text-xs px-2 py-1 rounded-full flex items-center"
+                                >
+                                    <span className="mr-1">{team.name.replace('Mentone - ', '')}</span>
+                                    <button
+                                        onClick={() => toggleTeamSelection(teamId)}
+                                        className="hover:text-mentone-navy"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            );
+                        })}
+                        <button
+                            onClick={clearTeamSelections}
+                            className="text-xs text-mentone-skyblue hover:text-mentone-navy ml-1"
+                        >
+                            Clear all
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Game listings - Card View */}
             {viewMode === "cards" && (
                 <div className="p-5">
-                    {games.length === 0 ? (
+                    {filteredGames.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 bg-gray-50 rounded-lg border border-gray-100">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             <p className="text-gray-500 font-medium">No upcoming games scheduled for this period</p>
-                            <p className="text-gray-400 text-sm mt-1">Try selecting a different time period</p>
+                            <p className="text-gray-400 text-sm mt-1">
+                                {selectedTeams.length > 0
+                                    ? "Try selecting different teams or date range"
+                                    : "Try selecting a different time period"}
+                            </p>
                         </div>
                     ) : (
                         <div className="space-y-8">
@@ -477,16 +675,31 @@ const UpcomingGames = () => {
                 </div>
             )}
 
+            {/* Debug info - remove in production */}
+            {process.env.NODE_ENV === 'development' && (
+                <div className="text-xs p-1 bg-gray-100 mb-2">
+                    {mentoneTeams.length === 0 ? (
+                        <span className="text-red-500">No teams loaded</span>
+                    ) : (
+                        <span className="text-green-500">Loaded {mentoneTeams.length} teams</span>
+                    )}
+                </div>
+            )}
+
             {/* Game listings - Table View */}
             {viewMode === "table" && (
                 <div className="p-5">
-                    {games.length === 0 ? (
+                    {filteredGames.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 bg-gray-50 rounded-lg border border-gray-100">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             <p className="text-gray-500 font-medium">No upcoming games scheduled for this period</p>
-                            <p className="text-gray-400 text-sm mt-1">Try selecting a different time period</p>
+                            <p className="text-gray-400 text-sm mt-1">
+                                {selectedTeams.length > 0
+                                    ? "Try selecting different teams or date range"
+                                    : "Try selecting a different time period"}
+                            </p>
                         </div>
                     ) : (
                         <div>
