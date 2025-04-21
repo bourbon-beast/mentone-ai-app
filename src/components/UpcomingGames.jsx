@@ -150,20 +150,26 @@ const UpcomingGames = () => {
     // Apply team filters to the games
     const filteredGames = selectedTeams.length > 0
         ? games.filter(game => {
-            // Check if any selected team is playing in this game
-            const homeTeamId = game.home_team?.id;
-            const awayTeamId = game.away_team?.id;
-            return selectedTeams.includes(homeTeamId) || selectedTeams.includes(awayTeamId);
+            // Check if the game's comp_id matches any selected team's comp_id
+            return selectedTeams.some(team =>
+                team.comp_id == game.comp_id && // Match on competition
+                // Also check if it's a Mentone game (since we're filtering for Mentone teams)
+                (game.home_team?.club === "Mentone" || game.away_team?.club === "Mentone")
+            );
         })
         : games;
 
     // Handler for toggling team selection
-    const toggleTeamSelection = (teamId) => {
+    const toggleTeamSelection = (team) => {
         setSelectedTeams(prevSelected => {
-            if (prevSelected.includes(teamId)) {
-                return prevSelected.filter(id => id !== teamId);
+            if (prevSelected.some(t => t.id === team.id)) {
+                return prevSelected.filter(t => t.id !== team.id);
             } else {
-                return [...prevSelected, teamId];
+                return [...prevSelected, {
+                    id: team.id,
+                    comp_id: team.comp_id,
+                    name: team.name
+                }];
             }
         });
     };
