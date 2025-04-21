@@ -149,24 +149,32 @@ const UpcomingGames = () => {
     };
 
     // Format date as "Saturday 26 Apr"
+    // Updated formatGameDate function
     const formatGameDate = (date) => {
         if (!date) return "TBD";
+
         const gameDate = date.toDate ? date.toDate() : new Date(date);
+
         return gameDate.toLocaleDateString('en-AU', {
             weekday: 'long',
             day: 'numeric',
-            month: 'short'
+            month: 'short',
+            timeZone: 'UTC' // Explicitly use UTC to avoid local conversion
         });
     };
 
     // Format time only (HH:MM)
     const formatGameTime = (date) => {
         if (!date) return "TBD";
+
+        // Use date directly without timezone adjustment
         const gameDate = date.toDate ? date.toDate() : new Date(date);
+
         return gameDate.toLocaleTimeString('en-AU', {
             hour: '2-digit',
             minute: '2-digit',
-            hour12: false
+            hour12: false,
+            timeZone: 'UTC' // Explicitly use UTC to avoid local conversion
         });
     };
 
@@ -527,23 +535,20 @@ const UpcomingGames = () => {
                                                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                         Competition
                                                     </th>
-                                                    <th scope="col" className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider text-center">
-                                                        Home Team
-                                                    </th>
-                                                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider ">
-                                                        Away Team
+                                                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                        Playing
                                                     </th>
                                                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                         Venue
                                                     </th>
                                                 </tr>
                                                 </thead>
+
                                                 <tbody className="bg-white divide-y divide-gray-200">
                                                 {dateGames.map((game, index) => {
                                                     const isMentoneHome = game.home_team?.club?.toLowerCase() === "mentone";
-                                                    const isMentoneAway = game.away_team?.club?.toLowerCase() === "mentone";
-                                                    const mentoneTeam = isMentoneHome ? game.home_team : game.away_team;
-                                                    const competitionName = mentoneTeam ? getCompetitionName(game, mentoneTeam) : "";
+                                                    const opponentTeam = isMentoneHome ? game.away_team : game.home_team;
+                                                    const isMentoneOpponent = opponentTeam?.club?.toLowerCase() === "mentone"; // edge case safety
 
                                                     return (
                                                         <tr key={game.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -551,22 +556,19 @@ const UpcomingGames = () => {
                                                                 {formatGameTime(game.date)}
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-left">
-                                                                {competitionName}
-
+                                                                {getCompetitionName(game, isMentoneHome ? game.home_team : game.away_team)}
                                                             </td>
-                                                            <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isMentoneHome ? 'text-mentone-skyblue' : 'text-gray-900'}`}>
-                                                                {isMentoneHome ? "Mentone" : game.home_team?.name || "TBD"}
-                                                            </td>
-                                                            <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isMentoneAway ? 'text-mentone-skyblue' : 'text-gray-900'}`}>
-                                                                {isMentoneAway ? "Mentone" : game.away_team?.name || "TBD"}
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center font-medium text-gray-900">
+                                                                {isMentoneOpponent ? "TBD" : opponentTeam?.name || "TBD"}
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                                {game.venue || "Venue TBD"}
+                                                                {(game.venue || "Venue TBD").trim()}
                                                             </td>
                                                         </tr>
                                                     );
                                                 })}
                                                 </tbody>
+
                                             </table>
                                         </div>
                                     </div>
