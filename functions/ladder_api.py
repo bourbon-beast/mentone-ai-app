@@ -1,10 +1,22 @@
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 from firebase_functions import https_fn
 from firebase_admin import initialize_app, firestore
+
+# Initialize Firebase
+initialize_app()
+db = firestore.client()
+
+# Cache settings
+CACHE_TTL_HOURS = 6
+
+@https_fn.on_request()
+def ladder_api(req: https_fn.Request) -> https_fn.Response:
+    """Firebase function to fetch ladder data for a specific competition/fixture."""
+
 
 # Initialize Firebase
 initialize_app()
