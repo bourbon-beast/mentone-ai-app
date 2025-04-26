@@ -69,14 +69,15 @@ def sanitize_for_firestore(data):
 
 
 def discover_competition_links(logger, session=None):
-    """Scrape the main competitions page to find all competitions and grades.
+    """
+    Scrape the main competitions page to find all competitions and grades.
 
     Args:
         logger: Logger instance
         session: Optional requests session
 
     Returns:
-        tuple: (competitions dict, grades list) - Keyed by ID for easy access
+        tuple: (competitions dict, grades list) - properly associated
     """
     logger.info(f"Discovering competitions from: {COMPETITIONS_URL}")
     response = make_request(COMPETITIONS_URL, session=session)
@@ -92,16 +93,36 @@ def discover_competition_links(logger, session=None):
 
     competitions = {}  # Dictionary keyed by comp_id
     grades = []        # List of grades
-    current_heading = ""
+    current_comp_id = None
+    current_comp_name = None
 
-    # Find section headings (categories like "Seniors", "Juniors", etc.)
-    for element in soup.select("h2, div.px-4.py-2.border-top"):
-        if element.name == "h2":
-            current_heading = clean_text(element.text)
-            logger.debug(f"Found competition category: {current_heading}")
+    # Find competition headings and their associated grades
+    for element in soup.select("div.p-4, div.px-4.py-2.border-top"):
+        # Check if this is a competition heading container
+        heading = element.select_one("h2.h4")
+        if heading:
+            current_comp_name = clean_text(heading.text)
+            # Extract comp_id if available in download link
+            download_link = element.select_one("a[href*='/reports/games/']")
+            if download_link:
+                href = download_link.get("href", "")
+                comp_id_match = re.search(r'/reports/games/(\d+)', href)
+                if comp_id_match:
+                    current_comp_id = comp_id_match.group(1)
+                    logger.debug(f"Found competition heading: {current_comp_name} [ID: {current_comp_id}]")
+
+                    # Create competition entry
+                    competitions[current_comp_id] = {
+                        "id": current_comp_id,
+                        "name": current_comp_name,
+                        "url": urljoin(BASE_URL, href),
+                        "active": True,
+                        "created_at": datetime.now(),
+                        "updated_at": datetime.now(),
+                    }
             continue
 
-        # Extract links from the content divs
+        # Extract grade links
         links = element.select("a")
         for link in links:
             href = link.get("href", "")
@@ -109,38 +130,30 @@ def discover_competition_links(logger, session=None):
 
             if match:
                 comp_id, fixture_id = match.groups()
-                comp_name = clean_text(link.text)
+                grade_name = clean_text(link.text)
 
-                logger.debug(f"Found link: {comp_name} [Comp ID: {comp_id}, Fixture/Grade ID: {fixture_id}]")
+                logger.debug(f"Found grade: {grade_name} [Comp ID: {comp_id}, Fixture ID: {fixture_id}]")
 
-                # Create or update competition entry
-                if comp_id not in competitions:
-                    competitions[comp_id] = {
-                        "id": comp_id,
-                        "name": comp_name,
-                        "category": current_heading,
-                        "active": True,
-                        "created_at": datetime.now(),
-                        "updated_at": datetime.now(),
-                    }
-
-                # Create grade entry
+                # Create grade entry with reference to parent competition
                 grade = {
                     "id": fixture_id,
-                    "fixture_id": int(fixture_id),  # Store as integer to match your data format
-                    "comp_id": int(comp_id),        # Store as integer to match your data format
-                    "name": comp_name,
+                    "fixture_id": int(fixture_id),  # Store as integer
+                    "comp_id": int(comp_id),        # Store as integer
+                    "name": grade_name,
                     "url": urljoin(BASE_URL, href),
                     "active": True,
                     "created_at": datetime.now(),
                     "updated_at": datetime.now(),
-                    "last_checked": datetime.now()
+                    "last_checked": datetime.now(),
+                    "parent_comp_id": current_comp_id,  # Link to parent competition
+                    "parent_comp_name": current_comp_name  # Store parent name for reference
                 }
 
                 grades.append(grade)
 
     logger.info(f"Found {len(competitions)} competitions and {len(grades)} grades")
     return competitions, grades
+
 
 def get_competition_details(logger, competition, session=None):
     """Fetch additional details for a competition.
@@ -285,26 +298,17 @@ def determine_gender(name):
 
     return "Unknown"
 
-def create_or_update_competition(db, competition, dry_run=False):
-    """Create or update a competition in Firestore.
-
-    Args:
-        db: Firestore client
-        competition: Competition dictionary
-        dry_run: If True, don't write to database
-
-    Returns:
-        bool: Success status
-    """
+def create_or_update_competition(db, comp, dry_run=False):
+    """Create or update a competition in Firestore."""
     if dry_run:
         return True
 
     try:
         # Use the comp_id directly as the document ID
-        comp_id = competition["id"]
+        comp_id = comp["id"]
 
         # Sanitize data for Firestore
-        clean_data = sanitize_for_firestore(competition)
+        clean_data = sanitize_for_firestore(comp)
 
         # Log what we're about to write
         logger.debug(f"Writing competition {comp_id}: {clean_data}")
@@ -313,27 +317,21 @@ def create_or_update_competition(db, competition, dry_run=False):
         comp_ref.set(clean_data, merge=True)
         return True
     except Exception as e:
-        logger.error(f"Failed to save competition {competition.get('name', 'unknown')} (ID: {competition.get('id', 'unknown')}): {str(e)}")
-        logger.error(f"Competition data: {competition}")
+        logger.error(f"Failed to save competition {comp.get('name', 'unknown')} (ID: {comp.get('id', 'unknown')}): {str(e)}")
         return False
 
 def create_or_update_grade(db, grade, dry_run=False):
-    """Create or update a grade in Firestore.
-
-    Args:
-        db: Firestore client
-        grade: Grade dictionary
-        dry_run: If True, don't write to database
-
-    Returns:
-        bool: Success status
-    """
+    """Create or update a grade in Firestore with proper references."""
     if dry_run:
         return True
 
     try:
         # Use the fixture_id directly as the document ID
         fixture_id = grade["id"]
+
+        # Create document reference to parent competition if available
+        if grade.get("parent_comp_id"):
+            grade["competition_ref"] = db.collection("competitions").document(grade["parent_comp_id"])
 
         # Sanitize data for Firestore
         clean_data = sanitize_for_firestore(grade)
@@ -346,7 +344,6 @@ def create_or_update_grade(db, grade, dry_run=False):
         return True
     except Exception as e:
         logger.error(f"Failed to save grade {grade.get('name', 'unknown')} (ID: {grade.get('id', 'unknown')}): {str(e)}")
-        logger.error(f"Grade data: {grade}")
         return False
 
 def main():
