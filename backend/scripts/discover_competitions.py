@@ -28,43 +28,37 @@ CURRENT_YEAR = datetime.now().year
 
 
 
+# Add the import at the top of discover_competitions.py
+from google.cloud.firestore_v1.document import DocumentReference
+
 def sanitize_for_firestore(data):
-    """Clean and validate data for Firestore compatibility.
-
-    Args:
-        data: Dictionary to clean
-
-    Returns:
-        dict: Cleaned dictionary
-    """
+    """Clean and validate data for Firestore compatibility."""
     if not isinstance(data, dict):
         return data
 
     clean_data = {}
 
     for key, value in data.items():
-        # Skip empty values
         if value is None:
             continue
-
-        # Handle nested dictionaries
         if isinstance(value, dict):
             clean_data[key] = sanitize_for_firestore(value)
-        # Handle lists
         elif isinstance(value, list):
             clean_data[key] = [sanitize_for_firestore(item) if isinstance(item, dict) else item for item in value]
-        # Handle basic types
-        elif isinstance(value, (str, int, float, bool, datetime)):
+        # ***** ADD DocumentReference here *****
+        elif isinstance(value, (str, int, float, bool, datetime, DocumentReference)):
             clean_data[key] = value
-        # Convert anything else to string
         else:
             try:
+                # Log if we ARE converting a DocumentReference unexpectedly
+                if isinstance(value, DocumentReference):
+                    logger.warning(f"Attempted to convert DocumentReference to string for key '{key}'. Check logic.")
                 clean_data[key] = str(value)
                 logger.warning(f"Converted {key} of type {type(value)} to string")
-            except:
-                logger.warning(f"Skipped field {key} with unconvertible type {type(value)}")
+            except Exception as e: # Catch specific conversion error
+                logger.warning(f"Skipped field {key} with unconvertible type {type(value)} due to: {e}")
 
-    return clean_data#!/usr/bin/env python
+    return clean_data
 
 
 
@@ -169,8 +163,9 @@ def get_competition_details(logger, competition, session=None):
     # Extract season year from name first
     competition["season"] = str(extract_season_year(competition["name"], None))
 
-    # Determine competition type
-    competition["type"] = determine_competition_type(competition["category"], competition["name"])
+    # Determine competition type - PASS None for category
+    # competition["type"] = determine_competition_type(competition["category"], competition["name"]) # OLD
+    competition["type"] = determine_competition_type(None, competition["name"]) # NEW
 
     # Set needed values to match your data structure
     competition["start_date"] = competition["created_at"]
@@ -207,10 +202,6 @@ def get_grade_details(logger, grade, session=None):
 
     # Extract gender
     grade["gender"] = determine_gender(grade["name"])
-
-    # Add references to parent competition (following your structure)
-    grade["competition_ref"] = {"__ref__": f"competitions/{grade['comp_id']}"}
-    grade["parent_comp_ref"] = {"__ref__": f"competitions/{grade['comp_id']}"}
 
     return grade
 
@@ -323,27 +314,44 @@ def create_or_update_competition(db, comp, dry_run=False):
 def create_or_update_grade(db, grade, dry_run=False):
     """Create or update a grade in Firestore with proper references."""
     if dry_run:
+        # Still useful to log what would happen
+        parent_comp_id_str = str(grade.get("comp_id", "UNKNOWN"))
+        logger.info(f"[DRY RUN] Would add reference to competitions/{parent_comp_id_str} for grade {grade.get('id', 'unknown')}")
         return True
 
     try:
         # Use the fixture_id directly as the document ID
-        fixture_id = grade["id"]
+        fixture_id_str = str(grade["id"]) # Ensure ID is a string
 
-        # Create document reference to parent competition if available
-        if grade.get("parent_comp_id"):
-            grade["competition_ref"] = db.collection("competitions").document(grade["parent_comp_id"])
+        # Create document reference to parent competition
+        # Use comp_id which seems to be the correct link based on discovery
+        parent_comp_id_str = str(grade.get("comp_id"))
+        if parent_comp_id_str:
+            # Create the actual Firestore reference object
+            comp_ref_obj = db.collection("competitions").document(parent_comp_id_str)
+            grade["competition_ref"] = comp_ref_obj
+            # Assuming parent_comp_ref is the same as competition_ref based on your logic
+            grade["parent_comp_ref"] = comp_ref_obj
+        else:
+            logger.warning(f"No 'comp_id' found for grade {fixture_id_str} to create reference.")
+            # Explicitly remove potential leftovers if ID is missing
+            grade.pop("competition_ref", None)
+            grade.pop("parent_comp_ref", None)
 
-        # Sanitize data for Firestore
+
+        # Sanitize data AFTER adding the reference object
         clean_data = sanitize_for_firestore(grade)
 
         # Log what we're about to write
-        logger.debug(f"Writing grade {fixture_id}: {clean_data}")
+        logger.debug(f"Writing grade {fixture_id_str}: {clean_data}")
 
-        grade_ref = db.collection("grades").document(fixture_id)
+        grade_ref = db.collection("grades").document(fixture_id_str)
         grade_ref.set(clean_data, merge=True)
         return True
     except Exception as e:
         logger.error(f"Failed to save grade {grade.get('name', 'unknown')} (ID: {grade.get('id', 'unknown')}): {str(e)}")
+        # Log the potentially problematic data (before sanitization might be useful too)
+        logger.error(f"Grade data (before sanitization): {grade}")
         return False
 
 def main():
