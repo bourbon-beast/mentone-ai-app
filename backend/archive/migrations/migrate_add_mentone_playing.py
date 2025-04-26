@@ -6,7 +6,7 @@ import time
 import sys
 
 # --- Configuration ---
-CREDENTIALS_PATH = "../secrets/serviceAccountKey.json"  # Adjust path if needed
+CREDENTIALS_PATH = "../../secrets/serviceAccountKey.json"  # Adjust path if needed
 COLLECTION_NAME = "games"
 BATCH_SIZE = 200  # Process documents in batches for efficiency
 DRY_RUN = False  # SET TO False TO ACTUALLY WRITE CHANGES TO FIRESTORE

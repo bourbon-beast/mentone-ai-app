@@ -9,7 +9,7 @@ from datetime import datetime, timezone # Import timezone
 import sys
 
 # --- Configuration ---
-CREDENTIALS_PATH = "./secrets/serviceAccountKey.json"  # Adjust path if needed
+CREDENTIALS_PATH = "../secrets/serviceAccountKey.json"  # Adjust path if needed
 COLLECTION_NAME = "games"
 BATCH_SIZE = 100  # Number of updates to batch together
 REQUEST_TIMEOUT = 15  # Increased timeout for potentially slower pages

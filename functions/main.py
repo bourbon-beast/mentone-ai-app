@@ -1,11 +1,11 @@
 from firebase_functions import https_fn
 from firebase_admin import initialize_app
 
-# Initialize Firebase app
+# Initialize Firebase
 initialize_app()
 
-# Import the ladder_api function
+# Import functions
 from ladder_api import ladder_api
 
-# Export the function
+# Export functions
 ladder_api = ladder_api

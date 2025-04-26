@@ -22,7 +22,7 @@ def setup_collections():
         print(f"Deleted all documents in {collection}")
 
     # Load team data from JSON
-    with open("../mentone_teams.json", "r") as f:
+    with open("mentone_teams.json", "r") as f:
         teams_data = json.load(f)
 
     # Setup collections

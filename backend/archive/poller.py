@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Constants
 BASE_URL = "https://www.revolutionise.com.au/vichockey/games/"
 TEAM_FILTER = "Mentone"
-TEAMS_FILE = "../mentone_teams.json"
+TEAMS_FILE = "mentone_teams.json"
 REQUEST_TIMEOUT = 10  # seconds
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import { Link } from "react-router-dom";
+
 
 const TeamList = () => {
     const [teams, setTeams] = useState([]);
@@ -169,13 +171,17 @@ const TeamList = () => {
 
                                     {/* Action Button */}
                                     <div className="flex justify-end">
-                                        <button className="flex items-center justify-center px-4 py-2 bg-mentone-navy text-white rounded-lg hover:bg-mentone-navy/90 transition-colors font-medium text-sm">
+                                        <Link
+                                            to={`/teams/${team.id}`}
+                                            className="flex items-center justify-center px-4 py-2 bg-mentone-navy text-white rounded-lg hover:bg-mentone-navy/90 transition-colors font-medium text-sm"
+                                            >
                                             View Team
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                            </svg>
-                                        </button>
-                                    </div>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </Link>
+
+                                </div>
                                 </div>
                             </div>
                         ))}

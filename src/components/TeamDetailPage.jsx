@@ -5,8 +5,8 @@ import { doc, getDoc, collection, query, where, orderBy, getDocs } from "firebas
 import { db } from "../firebase";
 import { ClipLoader } from 'react-spinners'; // Assuming you have this installed
 
-// Base URL for your API endpoint (adjust if needed)
-const API_BASE_URL = '/api';
+// Base URL for your deployed API endpoint
+const API_BASE_URL = 'https://ladder-api-55xtnu7seq-uc.a.run.app'; // <-- YOUR CLOUD RUN URL
 
 // Helper function to format date (adjust timezone as needed)
 const formatGameDate = (timestamp) => {
