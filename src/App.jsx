@@ -7,6 +7,8 @@ import TeamDetailPage from './components/TeamDetailPage'; // Import the new deta
 import TeamPerformance from './components/TeamPerformance';
 import PlayerStats from './components/PlayerStats'; // Import placeholders if they exist
 import WeeklySummary from './components/WeeklySummary'; // Import placeholders if they exist
+import TravelPlanner from './components/TravelPlanner'; // Import the new TravelPlanner component
+import VenueManager from './components/VenueManager'; // Import the new VenueManager component
 import './App.css';
 
 function App() {
@@ -27,6 +29,11 @@ function App() {
                     <Route path="players" element={<PlayerStats />} />
                     {/* Route for Weekly Summary */}
                     <Route path="summary" element={<WeeklySummary />} />
+                    {/* Route for Travel Planner */}
+                    <Route path="travel" element={<TravelPlanner />} />
+
+                    {/* Route for Venue Manager */}
+                    <Route path="venues" element={<VenueManager />} />
 
                     {/* Optional: Add a 404 Not Found route */}
                     {/* <Route path="*" element={<NotFound />} /> */}

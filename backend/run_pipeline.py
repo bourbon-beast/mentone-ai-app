@@ -1,37 +1,21 @@
 #!/usr/bin/env python3
 """
-Hockey Victoria Data Pipeline Orchestrator
+Hockey Victoria Data Pipeline Orchestrator - Interactive Mode
 
 This script orchestrates the execution of various data pipeline modules
-for the Mentone Hockey Club dashboard.
+for the Mentone Hockey Club dashboard in an interactive mode.
 
 Usage:
-    python -m backend.run_pipeline [--modules MODULE1,MODULE2,...] [--dry-run] [--creds CREDS_PATH] [--verbose]
+    python -m backend.run_pipeline
 
-Modules:
-    competitions - Discover competitions and grades
-    teams        - Discover teams for each grade
-    games        - Discover games/fixtures
-    results      - Update game results
-    players      - Discover player information
-    ladder       - Update ladder positions
-    all          - Run all modules in order
-
-Examples:
-    # Run all modules
-    python -m backend.run_pipeline --modules all
-
-    # Run only competitions and teams modules
-    python -m backend.run_pipeline --modules competitions,teams
-
-    # Run in dry-run mode (no database writes)
-    python -m backend.run_pipeline --modules all --dry-run
+The script will prompt you for which modules to run and configuration options.
 """
 
-import argparse
 import sys
 import importlib
 import time
+import os
+import json
 from datetime import datetime
 
 # Import utility modules
@@ -47,12 +31,26 @@ AVAILABLE_MODULES = [
     "ladder"         # Update ladder positions
 ]
 
-def run_module(module_name, args, logger):
+# Default credentials location - adjust as needed
+DEFAULT_CREDS_PATHS = [
+    "backend/secrets/serviceAccountKey.json",
+    "serviceAccountKey.json",
+    os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+]
+
+def find_credentials():
+    """Attempt to find credential file in common locations"""
+    for path in DEFAULT_CREDS_PATHS:
+        if path and os.path.exists(path):
+            return path
+    return None
+
+def run_module(module_name, config, logger):
     """Run a specific pipeline module.
 
     Args:
         module_name: Name of the module to run
-        args: Command line arguments
+        config: Configuration dictionary
         logger: Logger instance
 
     Returns:
@@ -73,19 +71,20 @@ def run_module(module_name, args, logger):
 
         # Prepare arguments for the module
         module_args = []
-        if args.dry_run:
+        if config.get("dry_run"):
             module_args.append("--dry-run")
-        if args.creds:
-            module_args.extend(["--creds", args.creds])
-        if args.verbose:
+        if config.get("creds_path"):
+            module_args.extend(["--creds", config["creds_path"]])
+        if config.get("verbose"):
             module_args.append("--verbose")
 
-        # Use module-specific arguments if defined in args_map
-        if hasattr(args, "args_map") and module_name in args.args_map:
-            module_args.extend(args.args_map[module_name])
+        # Add module-specific arguments
+        if module_name in config.get("module_args", {}):
+            module_args.extend(config["module_args"][module_name])
 
         # Convert arguments to sys.argv format
-        module_argv = [f"python -m {module_path}"] + module_args
+        module_argv = [module_path]  # Just use the module path as the script name
+        module_argv.extend(module_args)  # Add the arguments
 
         # Backup original sys.argv
         original_argv = sys.argv
@@ -113,84 +112,198 @@ def run_module(module_name, args, logger):
         logger.error(f"Error running module {module_name}: {e}")
         return False
 
+def print_header():
+    """Print a nice header for the interactive mode"""
+    print("\n" + "=" * 80)
+    print("=" * 30 + " HOCKEY VICTORIA DATA PIPELINE " + "=" * 29)
+    print("=" * 80)
+    print("\nMentone Hockey Club Data Pipeline - Interactive Mode\n")
+
+def get_modules_selection():
+    """Prompt user to select modules to run"""
+    print("\nAvailable modules:")
+    for i, module in enumerate(AVAILABLE_MODULES, 1):
+        print(f"  {i}. {module}")
+    print("  A. All modules")
+    print("  Q. Quit\n")
+
+    while True:
+        selection = input("Enter your selection (comma-separated numbers, 'A' for all, or 'Q' to quit): ").strip().upper()
+
+        if selection == 'Q':
+            return None
+
+        if selection == 'A':
+            return AVAILABLE_MODULES
+
+        try:
+            # Try to parse as comma-separated numbers
+            numbers = [int(n.strip()) for n in selection.split(',') if n.strip()]
+            selected_modules = []
+            for num in numbers:
+                if 1 <= num <= len(AVAILABLE_MODULES):
+                    selected_modules.append(AVAILABLE_MODULES[num-1])
+                else:
+                    print(f"Invalid selection: {num}. Please choose between 1 and {len(AVAILABLE_MODULES)}.")
+                    break
+            else:
+                if selected_modules:
+                    return selected_modules
+        except ValueError:
+            pass
+
+        print("Invalid selection. Please try again.")
+
+def get_credentials_path():
+    """Prompt user for credentials path"""
+    default_path = find_credentials()
+    default_prompt = f" (press Enter for {default_path})" if default_path else ""
+
+    print("\nFirebase Credentials:")
+    print("  The script needs Firebase credentials to access the database.")
+
+    while True:
+        path = input(f"Enter path to serviceAccountKey.json{default_prompt}: ").strip()
+
+        # Use default if just pressing Enter
+        if not path and default_path:
+            return default_path
+
+        # Check if file exists
+        if path and os.path.exists(path):
+            return path
+        elif path:
+            print(f"File not found: {path}")
+            try_again = input("Try again? (Y/n): ").strip().lower()
+            if try_again == 'n':
+                return None
+        else:
+            print("No credentials provided.")
+            use_dry_run = input("Would you like to run in dry-run mode instead? (Y/n): ").strip().lower()
+            if use_dry_run != 'n':
+                return None
+
+def get_dry_run_preference():
+    """Prompt user for dry-run preference"""
+    print("\nDry Run Mode:")
+    print("  In dry-run mode, no changes will be made to the database.")
+
+    while True:
+        response = input("Run in dry-run mode? (y/N): ").strip().lower()
+        if response in ('y', 'yes'):
+            return True
+        elif response in ('', 'n', 'no'):
+            return False
+        else:
+            print("Invalid input. Please enter 'y' or 'n'.")
+
+def get_verbose_preference():
+    """Prompt user for verbose logging preference"""
+    print("\nVerbose Logging:")
+    print("  Verbose mode provides more detailed logs.")
+
+    while True:
+        response = input("Enable verbose logging? (y/N): ").strip().lower()
+        if response in ('y', 'yes'):
+            return True
+        elif response in ('', 'n', 'no'):
+            return False
+        else:
+            print("Invalid input. Please enter 'y' or 'n'.")
+
+def get_module_days(module_name):
+    """Prompt user for number of days for certain modules"""
+    if module_name in ('games', 'results'):
+        print(f"\nDays ahead for {module_name}:")
+        default_days = 14 if module_name == 'games' else 7
+
+        while True:
+            try:
+                days_input = input(f"Enter number of days to look {module_name} (default: {default_days}): ").strip()
+                if not days_input:
+                    return default_days
+                days = int(days_input)
+                if days > 0:
+                    return days
+                else:
+                    print("Please enter a positive number.")
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+
+    return None
+
 def main():
-    """Main entry point for the pipeline orchestrator."""
-    parser = argparse.ArgumentParser(
-        description="Run Hockey Victoria data pipeline modules")
-
-    parser.add_argument(
-        "--modules",
-        type=str,
-        default="all",
-        help="Comma-separated list of modules to run (competitions,teams,games,results,players,ladder,all)"
-    )
-
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Run without writing to database"
-    )
-
-    parser.add_argument(
-        "--creds",
-        type=str,
-        help="Path to Firebase credentials file"
-    )
-
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose output"
-    )
-
-    # Module-specific arguments (advanced usage)
-    parser.add_argument(
-        "--args",
-        type=str,
-        help="JSON-formatted string with module-specific arguments, e.g.: '{\"games\":[\"--days\",\"7\"],\"results\":[\"--days\",\"3\"]}'"
-    )
-
-    args = parser.parse_args()
+    """Main entry point for the interactive pipeline orchestrator."""
+    print_header()
 
     # Setup logging
-    log_level = "DEBUG" if args.verbose else "INFO"
-    logger = setup_logger("pipeline", log_level=log_level)
+    logger = setup_logger("pipeline")
 
-    # Parse module-specific arguments if provided
-    if args.args:
-        import json
-        try:
-            args.args_map = json.loads(args.args)
-            logger.debug(f"Parsed module-specific arguments: {args.args_map}")
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse --args JSON: {e}")
-            return 1
+    # Get module selection
+    selected_modules = get_modules_selection()
+    if not selected_modules:
+        print("Exiting.")
+        return 0
 
-    # Determine which modules to run
-    modules_to_run = []
-    if args.modules.lower() == "all":
-        modules_to_run = AVAILABLE_MODULES
+    # Get configuration options
+    config = {
+        "dry_run": False,
+        "verbose": False,
+        "creds_path": None,
+        "module_args": {}
+    }
+
+    # Get credentials path
+    config["creds_path"] = get_credentials_path()
+
+    # If no credentials, suggest dry run
+    if not config["creds_path"]:
+        config["dry_run"] = True
+        print("No credentials provided. Running in dry-run mode.")
     else:
-        requested_modules = [m.strip().lower() for m in args.modules.split(",")]
-        for module in requested_modules:
-            if module in AVAILABLE_MODULES:
-                modules_to_run.append(module)
-            else:
-                logger.warning(f"Unknown module: {module}")
+        # Otherwise ask about dry run
+        config["dry_run"] = get_dry_run_preference()
 
-    if not modules_to_run:
-        logger.error("No valid modules specified")
-        return 1
+    # Get verbose preference
+    config["verbose"] = get_verbose_preference()
+
+    # Get module-specific days parameter
+    for module in selected_modules:
+        days = get_module_days(module)
+        if days:
+            config["module_args"][module] = ["--days", str(days)]
+
+    # Show configuration summary
+    print("\nConfiguration Summary:")
+    print(f"  Modules: {', '.join(selected_modules)}")
+    print(f"  Dry Run: {'Yes' if config['dry_run'] else 'No'}")
+    print(f"  Verbose: {'Yes' if config['verbose'] else 'No'}")
+    print(f"  Credentials: {config['creds_path'] or 'None (dry-run)'}")
+    for module, args in config.get("module_args", {}).items():
+        print(f"  {module.capitalize()} args: {' '.join(args)}")
+
+    # Confirm execution
+    print("\nReady to execute pipeline.")
+    confirm = input("Continue? (Y/n): ").strip().lower()
+    if confirm in ('n', 'no'):
+        print("Execution cancelled.")
+        return 0
 
     # Start the pipeline
-    logger.info(f"Starting Hockey Victoria data pipeline with modules: {', '.join(modules_to_run)}")
+    print("\nStarting pipeline...")
     pipeline_start_time = datetime.now()
+
+    # Configure logging level based on verbose setting
+    log_level = "DEBUG" if config["verbose"] else "INFO"
+    logger = setup_logger("pipeline", log_level=log_level)
+
+    logger.info(f"Starting Hockey Victoria data pipeline with modules: {', '.join(selected_modules)}")
 
     successful_modules = 0
     failed_modules = 0
 
-    for module in modules_to_run:
-        success = run_module(module, args, logger)
+    for module in selected_modules:
+        success = run_module(module, config, logger)
         if success:
             successful_modules += 1
         else:
@@ -204,12 +317,25 @@ def main():
     logger.info(f"Pipeline completed in {pipeline_elapsed_time:.2f} seconds")
     logger.info(f"Modules: {successful_modules} successful, {failed_modules} failed")
 
-    if args.dry_run:
+    print("\nPipeline Execution Complete:")
+    print(f"  Duration: {pipeline_elapsed_time:.2f} seconds")
+    print(f"  Successful: {successful_modules}/{len(selected_modules)}")
+    print(f"  Failed: {failed_modules}/{len(selected_modules)}")
+
+    if config["dry_run"]:
         logger.info("DRY RUN - No database changes were made")
+        print("  Note: No database changes were made (dry-run mode)")
 
     if failed_modules > 0:
+        print("\nSome modules failed. Check the logs for details.")
         return 1
+
+    print("\nAll modules completed successfully!")
     return 0
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user.")
+        sys.exit(130)

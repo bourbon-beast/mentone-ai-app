@@ -64,6 +64,22 @@ const Layout = () => {
                         >
                             Weekly Summary
                         </NavLink>
+                        <NavLink
+                            to="/travel" // Link to Travel Planner
+                            className={({ isActive }) =>
+                                `py-3 px-4 focus:outline-none text-sm whitespace-nowrap ${isActive ? activeClassName : inactiveClassName}`
+                            }
+                        >
+                            Travel Planner
+                        </NavLink>
+                        <NavLink
+                            to="/venues" // Link to Venue Manager
+                            className={({ isActive }) =>
+                                `py-3 px-4 focus:outline-none text-sm whitespace-nowrap ${isActive ? activeClassName : inactiveClassName}`
+                            }
+                        >
+                            Venues
+                        </NavLink>
                         {/* Add other links as needed */}
                     </div>
                 </div>
