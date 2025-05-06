@@ -355,8 +355,8 @@ const TeamDetailPage = () => {
                         {!loadingGames && games.length > 0 && (
                             <div className="space-y-4">
                                 {games.map(game => {
-                                    const opponent = game.home_team?.club?.toLowerCase() === 'mentone' ? game.away_team : game.home_team;
-                                    const isHome = game.home_team?.club?.toLowerCase() === 'mentone';
+                                    const opponent = game.home_team?.club?.toLowerCase().includes("mentone") ? game.away_team : game.home_team;
+                                    const isHome = game.home_team?.club?.toLowerCase().includes("mentone");
                                     const scoreDisplay = (game.status === 'completed' && typeof game.home_team?.score === 'number')
                                         ? `${game.home_team.score} - ${game.away_team.score}`
                                         : '-';
@@ -378,7 +378,6 @@ const TeamDetailPage = () => {
                                                     </div>
                                                     {/* Opponent & Score */}
                                                     <div className="md:col-span-4 text-center md:text-left">
-                                                        <div className="text-gray-500 text-xs mb-1">{isHome ? 'vs' : '@'}</div>
                                                         <div className={`font-medium ${opponent?.club?.toLowerCase() === 'mentone' ? 'text-mentone-skyblue' : 'text-gray-800'}`}>{opponent?.name || 'Opponent TBD'}</div>
                                                         <div className="font-bold text-lg text-mentone-navy mt-1">{scoreDisplay}</div>
                                                     </div>

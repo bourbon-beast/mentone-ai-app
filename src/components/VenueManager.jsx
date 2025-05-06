@@ -207,3 +207,5 @@ const VenueManager = () => {
             </div>
         </div>
     );
+};
+    export default VenueManager;

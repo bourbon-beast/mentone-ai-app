@@ -37,44 +37,78 @@ def extract_venue_info(soup):
     Returns:
         dict: Venue information dictionary or None if not found
     """
-    # Find the venue section - look for div containing the word "Venue"
-    venue_sections = soup.find_all(lambda tag: tag.name == 'div' and
-                                               tag.find(text=re.compile(r'Venue', re.IGNORECASE)))
-
-    if not venue_sections:
-        logger.warning("No venue section found on page")
-        return None
-
     venue_data = {}
 
-    for section in venue_sections:
-        # Get the containing row that has the venue info
-        parent_row = section.find_parent('div', class_='row')
-        if not parent_row:
+    # Look for all divs with text content 'Venue'
+    venue_labels = soup.find_all('div', string=lambda s: s and s.strip() == 'Venue')
+
+    # If we can't find it with exact match, try a more flexible approach
+    if not venue_labels:
+        venue_labels = soup.find_all('div', string=lambda s: s and 'venue' in s.lower())
+
+    # Process each potential venue label
+    for venue_label in venue_labels:
+        # Get the parent div that contains both the label and the venue info
+        parent_div = venue_label.parent
+        if not parent_div:
             continue
 
-        # Extract venue name - it's typically the text right after the "Venue" label
-        venue_div = section.find_parent('div')
-        if venue_div:
-            # Get all text and remove the label "Venue"
-            full_text = venue_div.get_text(strip=True)
-            venue_name = re.sub(r'Venue', '', full_text, flags=re.IGNORECASE).strip()
-            venue_data['name'] = venue_name
+        # The venue name is the text node immediately after the 'Venue' div
+        # Extract all text directly in the parent div (excluding nested divs)
+        venue_text = ""
+        for content in parent_div.contents:
+            if content == venue_label:
+                continue  # Skip the label itself
+            if isinstance(content, str) and content.strip():
+                venue_text = content.strip()
+                break
 
-            # Try to find the address which is typically in a smaller font div
-            address_div = venue_div.find('div', class_='font-size-sm')
-            if address_div:
-                venue_data['address'] = clean_text(address_div.get_text())
+        if venue_text:
+            venue_data['name'] = venue_text
 
-        # Look for field information
-        field_section = parent_row.find(lambda tag: tag.name == 'div' and
-                                                    tag.find(text=re.compile(r'Field', re.IGNORECASE)))
-        if field_section:
-            field_div = field_section.find_parent('div')
-            if field_div:
-                field_text = field_div.get_text(strip=True)
-                field_code = re.sub(r'Field', '', field_text, flags=re.IGNORECASE).strip()
-                venue_data['field_code'] = field_code
+        # Look for the address in the next div with class font-size-sm
+        next_div = venue_label.find_next('div', class_='font-size-sm')
+        if next_div:
+            venue_data['address'] = clean_text(next_div.get_text())
+
+        # If we found venue info, no need to check other labels
+        if venue_data.get('name'):
+            break
+
+    # Look for field code - similar approach
+    field_labels = soup.find_all('div', string=lambda s: s and s.strip() == 'Field')
+    if not field_labels:
+        field_labels = soup.find_all('div', string=lambda s: s and 'field' in s.lower())
+
+    for field_label in field_labels:
+        parent_div = field_label.parent
+        if not parent_div:
+            continue
+
+        # Extract field code - same logic as venue name
+        field_code = ""
+        for content in parent_div.contents:
+            if content == field_label:
+                continue
+            if isinstance(content, str) and content.strip():
+                field_code = content.strip()
+                break
+
+        if field_code:
+            venue_data['field_code'] = field_code
+            break
+
+    # Extract map URL if available
+    map_iframe = soup.select_one('iframe[src*="maps.google"]')
+    if map_iframe:
+        map_url = map_iframe.get('src')
+        if map_url:
+            venue_data['map_url'] = map_url
+
+            # Try to extract a simplified map query parameter
+            map_query = re.search(r'q=([^&]+)', map_url)
+            if map_query:
+                venue_data['google_maps_query'] = map_query.group(1)
 
     # If we found a venue name, add additional fields
     if 'name' in venue_data:
@@ -130,6 +164,10 @@ def extract_venues_from_games(db, game_urls, dry_run=False, max_games=None):
             # Parse with BeautifulSoup
             soup = BeautifulSoup(response.text, 'html.parser')
 
+            # For debugging specific games
+            # if i == 0:
+            #     save_debug_html(response.text, f"game_{i+1}")
+
             # Extract venue information
             venue_data = extract_venue_info(soup)
 
@@ -151,8 +189,23 @@ def extract_venues_from_games(db, game_urls, dry_run=False, max_games=None):
                     # Store in Firestore
                     venue_ref = save_venue_to_firestore(db, venue_data)
                     logger.info(f"Saved venue: {venue_data['name']} (ID: {venue_ref.id})")
+
+                    # Log details for debugging
+                    if 'field_code' in venue_data:
+                        logger.info(f"  Field Code: {venue_data['field_code']}")
+                    if 'address' in venue_data:
+                        logger.info(f"  Address: {venue_data['address']}")
+                    if 'map_url' in venue_data:
+                        logger.info(f"  Map URL found")
                 else:
                     logger.info(f"[DRY RUN] Would save venue: {venue_data['name']}")
+                    # Log details even in dry run
+                    if 'field_code' in venue_data:
+                        logger.info(f"  Field Code: {venue_data['field_code']}")
+                    if 'address' in venue_data:
+                        logger.info(f"  Address: {venue_data['address']}")
+                    if 'map_url' in venue_data:
+                        logger.info(f"  Map URL found")
 
                 success_count += 1
 
@@ -285,10 +338,10 @@ def fetch_missing_venue_data(db):
                 # Extract venue information
                 venue_data = extract_venue_info(soup)
 
-                if venue_data and 'address' in venue_data:
+                if venue_data and ('address' in venue_data or 'field_code' in venue_data or 'map_url' in venue_data):
                     # Store in Firestore
                     venue_ref = save_venue_to_firestore(db, venue_data)
-                    logger.info(f"Updated venue: {venue_data['name']} with address: {venue_data['address']}")
+                    logger.info(f"Updated venue: {venue_data['name']} with additional details")
                     updated_count += 1
 
                 # Sleep to avoid hammering the server
@@ -330,9 +383,21 @@ def main():
     )
 
     parser.add_argument(
+        "--single-url",
+        type=str,
+        help="Process a single game URL for testing"
+    )
+
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose output"
+    )
+
+    parser.add_argument(
+        "--debug-page",
+        type=str,
+        help="Save a specific game page HTML for debugging"
     )
 
     args = parser.parse_args()
@@ -345,6 +410,37 @@ def main():
         # Initialize Firebase
         logger.info("Initializing Firebase...")
         db = initialize_firebase(args.creds)
+
+        # Special debug option to save HTML from a specific page
+        if args.debug_page:
+            logger.info(f"Debugging specific page: {args.debug_page}")
+            response = make_request(args.debug_page)
+            if response:
+                save_debug_html(response.text, "debug_page")
+                logger.info("Debug page saved to debug_page.html")
+                return 0
+            else:
+                logger.error("Failed to fetch debug page")
+                return 1
+
+        # Process a single URL if specified
+        if args.single_url:
+            logger.info(f"Processing single URL: {args.single_url}")
+            response = make_request(args.single_url)
+            if response:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                venue_data = extract_venue_info(soup)
+                if venue_data:
+                    logger.info(f"Extracted venue data: {venue_data}")
+                    if not args.dry_run:
+                        venue_ref = save_venue_to_firestore(db, venue_data)
+                        logger.info(f"Saved venue: {venue_data['name']} (ID: {venue_ref.id})")
+                else:
+                    logger.error("No venue data found")
+                return 0
+            else:
+                logger.error("Failed to fetch URL")
+                return 1
 
         if args.update_missing:
             # Update games with missing venue details
@@ -373,7 +469,8 @@ def main():
             for venue_name, venue_data in venues.items():
                 address = venue_data.get('address', 'No address')
                 field = venue_data.get('field_code', 'No field code')
-                logger.info(f"Venue: {venue_name}, Address: {address}, Field: {field}")
+                map_url = "Map URL available" if 'map_url' in venue_data else "No map URL"
+                logger.info(f"Venue: {venue_name}, Address: {address}, Field: {field}, {map_url}")
 
         return 0
 

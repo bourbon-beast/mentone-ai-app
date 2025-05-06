@@ -10,8 +10,7 @@ import json
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize Firestore
-db = firestore.Client()
+
 
 # Google Maps API key - Set this using environment variables or Firebase config
 # GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
@@ -29,6 +28,9 @@ def calculate_travel_time(request):
     Returns:
         JSON response with travel details
     """
+    # Initialize Firestore
+    db = firestore.Client()
+
     # Set CORS headers for preflight requests
     if request.method == 'OPTIONS':
         headers = {
