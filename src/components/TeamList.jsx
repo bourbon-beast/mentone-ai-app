@@ -1,26 +1,52 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 import { Link } from "react-router-dom";
+import { useFavorites } from "../context/FavoritesContext";
+import FavoriteButton from "./common/FavoriteButton";
+import FilterByFavorites from "./common/FilterByFavorites";
+
+const API_BASE_URL = 'https://ladder-api-55xtnu7seq-uc.a.run.app';
 
 const TeamList = () => {
     const [teams, setTeams] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState("all");
+    const [search, setSearch] = useState("");
+    const [ladderPositions, setLadderPositions] = useState({});
+    const { showOnlyFavorites, favoriteTeams } = useFavorites();
+
+    const fetchLadderData = useCallback(async (comp_id, fixture_id, teamId) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/ladder?comp_id=${comp_id}&fixture_id=${fixture_id}`);
+            if (!response.ok) {
+                throw new Error(`Ladder API Error (${response.status})`);
+            }
+            const data = await response.json();
+            setLadderPositions(prev => ({
+                ...prev,
+                [teamId]: data.position ?? '-'
+            }));
+        } catch (error) {
+            console.error(`Error fetching ladder for team ${teamId}:`, error);
+            setLadderPositions(prev => ({
+                ...prev,
+                [teamId]: '-'
+            }));
+        }
+    }, []);
 
     useEffect(() => {
         const fetchTeams = async () => {
             try {
                 setLoading(true);
-                let teamsQuery;
+                let teamsQuery = query(
+                    collection(db, "teams"),
+                    where("is_home_club", "==", true)
+                );
 
-                if (filter === "all") {
-                    teamsQuery = query(
-                        collection(db, "teams"),
-                        where("is_home_club", "==", true)
-                    );
-                } else {
+                if (filter !== "all") {
                     teamsQuery = query(
                         collection(db, "teams"),
                         where("is_home_club", "==", true),
@@ -34,17 +60,20 @@ const TeamList = () => {
                     ...doc.data()
                 }));
 
-                teamsData.sort((a, b) => {
-                    if (a.type !== b.type) {
-                        return a.type.localeCompare(b.type);
+                teamsData.sort((a, b) => a.comp_name.localeCompare(b.comp_name));
+                setTeams(teamsData);
+
+                teamsData.forEach(team => {
+                    if (team.comp_id && team.fixture_id) {
+                        fetchLadderData(team.comp_id, team.fixture_id, team.id);
+                    } else {
+                        setLadderPositions(prev => ({
+                            ...prev,
+                            [team.id]: '-'
+                        }));
                     }
-                    if (a.gender !== b.gender) {
-                        return a.gender.localeCompare(b.gender);
-                    }
-                    return a.name.localeCompare(b.name);
                 });
 
-                setTeams(teamsData);
                 setLoading(false);
             } catch (err) {
                 console.error("Error fetching teams:", err);
@@ -54,14 +83,25 @@ const TeamList = () => {
         };
 
         fetchTeams();
-    }, [filter]);
+    }, [filter, fetchLadderData]);
+
+    const filteredTeams = teams
+        .filter(team =>
+            showOnlyFavorites
+                ? favoriteTeams.some(fav => fav.id === team.id)
+                : true
+        )
+        .filter(team =>
+            team.comp_name.toLowerCase().includes(search.toLowerCase()) ||
+            team.gender.toLowerCase().includes(search.toLowerCase())
+        );
 
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64 bg-white rounded-xl shadow-sm">
                 <div className="flex flex-col items-center">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-mentone-skyblue mb-2"></div>
-                    <p className="text-mentone-navy font-medium">Loading teams...</p>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-mentone-skyblue mb-2"></div>
+                    <p className="text-mentone-navy text-sm">Loading teams...</p>
                 </div>
             </div>
         );
@@ -69,102 +109,97 @@ const TeamList = () => {
 
     if (error) {
         return (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-red-600">
-                <p className="font-medium mb-1">Error</p>
-                <p className="text-sm">{error}</p>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600">
+                <p className="font-medium text-sm">Error: {error}</p>
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {/* Header section */}
-            <div className="bg-gradient-to-r from-mentone-navy to-mentone-navy/90 p-5 flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-mentone-gold tracking-tight">Mentone Teams</h2>
-                <div className="bg-mentone-navy/50 backdrop-blur-sm rounded-lg p-1 flex">
-                    {["all", "Senior", "Junior", "Midweek"].map((type) => (
+        <div className="bg-white rounded-xl shadow-sm">
+            <div className="p-4 border-b border-gray-100">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <h2 className="text-xl font-bold text-mentone-navy">Mentone Teams</h2>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <input
+                            type="text"
+                            placeholder="Search teams..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="w-full sm:w-64 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mentone-skyblue"
+                        />
+                        <FilterByFavorites />
+                    </div>
+                </div>
+                <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
+                    {["all", "Senior", "Junior", "Midweek", "Masters"].map((type) => (
                         <button
                             key={type}
                             onClick={() => setFilter(type)}
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                            className={`px-3 py-1 text-sm font-medium rounded-full whitespace-nowrap ${
                                 filter === type
-                                    ? "bg-mentone-skyblue text-white shadow-sm"
-                                    : "text-white/80 hover:bg-mentone-navy/70 hover:text-white"
+                                    ? "bg-mentone-skyblue text-white"
+                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                             }`}
                         >
-                            {type === "all" ? "All Teams" : type}
+                            {type === "all" ? "All" : type}
                         </button>
                     ))}
                 </div>
             </div>
-
-            {/* Team table */}
-            <div className="p-5">
-                {teams.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 bg-gray-50 rounded-lg border border-gray-100">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <p className="text-gray-500 font-medium">No teams found</p>
-                        <p className="text-gray-400 text-sm mt-1">Try selecting a different category</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Team</th>
-                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Type</th>
-                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Gender</th>
-                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Competition</th>
-                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Season</th>
-                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Action</th>
+            {filteredTeams.length === 0 ? (
+                <div className="p-6 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <p className="text-gray-500 text-sm">No teams found</p>
+                    <p className="text-gray-400 text-xs mt-1">
+                        {showOnlyFavorites ? "No favorite teams. Add some or view all." : "Try a different filter or search term."}
+                    </p>
+                </div>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                        <tr className="border-b border-gray-100">
+                            <th className="p-3 text-left font-medium text-gray-600">Competition</th>
+                            <th className="p-3 text-left font-medium text-gray-600">Type</th>
+                            <th className="p-3 text-left font-medium text-gray-600">Gender</th>
+                            <th className="p-3 text-left font-medium text-gray-600">Season</th>
+                            <th className="p-3 text-left font-medium text-gray-600">Ladder Position</th>
+                            <th className="p-3 text-left font-medium text-gray-600"></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {filteredTeams.map((team) => (
+                            <tr key={team.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                <td className="p-3">
+                                    <Link to={`/teams/${team.id}`} className="text-mentone-navy font-medium text-left hover:underline">
+                                        {team.comp_name.split(" - ")[0]}
+                                    </Link>
+                                </td>
+                                <td className="p-3">
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                            team.type === "Senior" ? "bg-mentone-skyblue/10 text-mentone-skyblue" :
+                                                team.type === "Junior" ? "bg-mentone-green/10 text-mentone-green" :
+                                                    team.type === "Midweek" ? "bg-mentone-gold/10 text-mentone-charcoal" :
+                                                        "bg-gray-100 text-gray-600"
+                                        }`}>
+                                            {team.type}
+                                        </span>
+                                </td>
+                                <td className="p-3 text-gray-700">{team.gender}</td>
+                                <td className="p-3 text-gray-700">{team.comp_name.split(" - ")[1] || "2025"}</td>
+                                <td className="p-3 text-gray-700">{ladderPositions[team.id] || '-'}</td>
+                                <td className="p-3">
+                                    <FavoriteButton team={team} />
+                                </td>
                             </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                            {teams.map((team) => {
-                                const teamName = team.name.replace("Mentone Hockey Club - ", "");
-                                const competitionName = team.comp_name?.split(" - ")[0] || "Unknown";
-                                const season = team.comp_name?.split(" - ")[1] || "2025";
-
-                                return (
-                                    <tr key={team.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-4 py-2 text-gray-700">{teamName}</td>
-                                        <td className="px-4 py-2 text-gray-700">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                                    team.type === "Senior"
-                                                        ? "bg-mentone-skyblue/10 text-mentone-skyblue"
-                                                        : team.type === "Junior"
-                                                            ? "bg-mentone-green/10 text-mentone-green"
-                                                            : team.type === "Midweek"
-                                                                ? "bg-mentone-gold/10 text-mentone-charcoal"
-                                                                : "bg-gray-100 text-gray-600"
-                                                }`}>
-                                                    {team.type}
-                                                </span>
-                                        </td>
-                                        <td className="px-4 py-2 text-gray-700">{team.gender}</td>
-                                        <td className="px-4 py-2 text-gray-700">{competitionName}</td>
-                                        <td className="px-4 py-2 text-gray-700">{season}</td>
-                                        <td className="px-4 py-2 text-right">
-                                            <Link
-                                                to={`/teams/${team.id}`}
-                                                className="flex items-center justify-center px-3 py-1 bg-mentone-navy text-white rounded-lg hover:bg-mentone-navy/90 transition-colors font-medium text-sm"
-                                            >
-                                                View Team
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                </svg>
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
+                        ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,10 +1,15 @@
 // src/components/Layout.jsx
 import { NavLink, Outlet } from 'react-router-dom'; // Import NavLink and Outlet
+import { useFavorites } from '../context/FavoritesContext';
 
 const Layout = () => {
     // Define the active class string for NavLink
     const activeClassName = "border-b-2 border-mentone-skyblue text-mentone-skyblue font-medium";
     const inactiveClassName = "text-gray-600 hover:text-mentone-skyblue";
+
+    // Get favorites count for displaying badge
+    const { favoriteTeams } = useFavorites();
+    const hasFavorites = favoriteTeams.length > 0;
 
     return (
         <div className="bg-mentone-offwhite min-h-screen flex flex-col"> {/* Use theme color */}
@@ -39,6 +44,19 @@ const Layout = () => {
                             }
                         >
                             Teams
+                        </NavLink>
+                        <NavLink
+                            to="/my-teams" // New Link to My Teams
+                            className={({ isActive }) =>
+                                `py-3 px-4 focus:outline-none text-sm whitespace-nowrap flex items-center ${isActive ? activeClassName : inactiveClassName}`
+                            }
+                        >
+                            My Teams
+                            {hasFavorites && (
+                                <span className="ml-1.5 bg-mentone-gold text-mentone-navy text-xs rounded-full px-1.5 min-w-5 text-center">
+                                    {favoriteTeams.length}
+                                </span>
+                            )}
                         </NavLink>
                         <NavLink
                             to="/performance" // Link to performance page

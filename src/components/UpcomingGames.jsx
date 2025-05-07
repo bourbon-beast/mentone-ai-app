@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import { useFavorites } from "../context/FavoritesContext";
+import FilterByFavorites from "./common/FilterByFavorites";
+import FavoriteButton from "./common/FavoriteButton";
+
 
 const UpcomingGames = () => {
     const [games, setGames] = useState([]);
@@ -10,6 +14,7 @@ const UpcomingGames = () => {
     const [gradeData, setGradeData] = useState({});
     const [textCopied, setTextCopied] = useState(false);
     const tableContainerRef = useRef(null);
+    const { showOnlyFavorites, favoriteTeams } = useFavorites();
 
     // Team filtering state
     const [mentoneTeams, setMentoneTeams] = useState([]);
@@ -157,12 +162,20 @@ const UpcomingGames = () => {
     // Apply team filters
     const filteredGames = selectedTeams.length > 0
         ? games.filter(game => {
+            // Game must have a fixture_id to be filterable by team selection
             if (!game.fixture_id) return false;
+
+            // Check if the game's fixture_id matches any selected team's fixture_id
             return selectedTeams.some(selectedTeam =>
                 selectedTeam.fixture_id === game.fixture_id
             );
         })
-        : games;
+        : showOnlyFavorites
+            ? games.filter(game => {
+                // If showing only favorites, check if game fixture_id is in any favorite team's fixture_id
+                return favoriteTeams.some(favTeam => favTeam.fixture_id === game.fixture_id);
+            })
+            : games; // If no teams selected and not filtering by favorites, show all fetched games
 
     // Handler for toggling team selection
     const toggleTeamSelection = (team) => {
@@ -372,6 +385,8 @@ const UpcomingGames = () => {
                     <p className="text-mentone-navy text-sm font-medium">
                         Showing games: {getFilterDateRangeText(dateFilter)}
                     </p>
+                    {/* Add the FilterByFavorites button here */}
+                    <FilterByFavorites buttonSize="sm" variant="outline" />
 
                     {/* Team filter dropdown */}
                     <div className="relative">

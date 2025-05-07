@@ -4,6 +4,8 @@ import { useParams, Link } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, orderBy, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 import { ClipLoader } from 'react-spinners'; // Assuming you have this installed
+import { useFavorites } from "../context/FavoritesContext";
+import FavoriteButton from "./common/FavoriteButton";
 
 // Base URL for your deployed API endpoint
 const API_BASE_URL = 'https://ladder-api-55xtnu7seq-uc.a.run.app'; // <-- YOUR CLOUD RUN URL
@@ -59,7 +61,7 @@ const TeamDetailPage = () => {
     const [teamData, setTeamData] = useState(null);
     const [games, setGames] = useState([]);
     const [summaryStats, setSummaryStats] = useState({ w: 0, d: 0, l: 0 });
-
+    const { isFavorite, toggleFavorite } = useFavorites();
     // Ladder State
     const [ladderData, setLadderData] = useState({ position: null, points: null, isLoading: false, error: null });
 
