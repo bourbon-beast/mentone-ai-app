@@ -162,18 +162,18 @@ const TeamList = () => {
                     <table className="w-full text-sm">
                         <thead>
                         <tr className="border-b border-gray-100">
-                            <th className="p-3 text-left font-medium text-gray-600">Competition</th>
-                            <th className="p-3 text-left font-medium text-gray-600">Type</th>
-                            <th className="p-3 text-left font-medium text-gray-600">Gender</th>
-                            <th className="p-3 text-left font-medium text-gray-600">Season</th>
-                            <th className="p-3 text-left font-medium text-gray-600">Ladder Position</th>
-                            <th className="p-3 text-left font-medium text-gray-600"></th>
+                            <th className="p-3 text-center font-medium text-gray-600">Competition</th>
+                            <th className="p-3 text-center font-medium text-gray-600">Type</th>
+                            <th className="p-3 text-center font-medium text-gray-600">Gender</th>
+                            <th className="p-3 text-center font-medium text-gray-600">Season</th>
+                            <th className="p-3 text-center font-medium text-gray-600">Ladder Position</th>
+                            <th className="p-3 text-center font-medium text-gray-600">Favourite</th>
                         </tr>
                         </thead>
                         <tbody>
                         {filteredTeams.map((team) => (
                             <tr key={team.id} className="border-b border-gray-100 hover:bg-gray-50">
-                                <td className="p-3">
+                                <td className="p-3 text-left">
                                     <Link to={`/teams/${team.id}`} className="text-mentone-navy font-medium text-left hover:underline">
                                         {team.comp_name.split(" - ")[0]}
                                     </Link>
