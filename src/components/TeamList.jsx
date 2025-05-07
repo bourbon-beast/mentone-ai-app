@@ -3,7 +3,6 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 import { Link } from "react-router-dom";
 
-
 const TeamList = () => {
     const [teams, setTeams] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -82,7 +81,6 @@ const TeamList = () => {
             {/* Header section */}
             <div className="bg-gradient-to-r from-mentone-navy to-mentone-navy/90 p-5 flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-mentone-gold tracking-tight">Mentone Teams</h2>
-
                 <div className="bg-mentone-navy/50 backdrop-blur-sm rounded-lg p-1 flex">
                     {["all", "Senior", "Junior", "Midweek"].map((type) => (
                         <button
@@ -100,7 +98,7 @@ const TeamList = () => {
                 </div>
             </div>
 
-            {/* Team grid */}
+            {/* Team table */}
             <div className="p-5">
                 {teams.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 bg-gray-50 rounded-lg border border-gray-100">
@@ -111,80 +109,59 @@ const TeamList = () => {
                         <p className="text-gray-400 text-sm mt-1">Try selecting a different category</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                        {teams.map((team) => (
-                            <div
-                                key={team.id}
-                                className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 transform hover:translate-y-[-2px]"
-                            >
-                                {/* Team card top stripe based on team type */}
-                                <div
-                                    className={`h-2 ${
-                                        team.type === "Senior"
-                                            ? "bg-mentone-skyblue"
-                                            : team.type === "Junior"
-                                                ? "bg-mentone-green"
-                                                : team.type === "Midweek"
-                                                    ? "bg-mentone-gold"
-                                                    : "bg-gray-400"
-                                    }`}
-                                ></div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Team</th>
+                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Type</th>
+                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Gender</th>
+                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Competition</th>
+                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Season</th>
+                                <th className="px-4 py-2 text-center font-medium text-gray-500 uppercase">Action</th>
+                            </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                            {teams.map((team) => {
+                                const teamName = team.name.replace("Mentone Hockey Club - ", "");
+                                const competitionName = team.comp_name?.split(" - ")[0] || "Unknown";
+                                const season = team.comp_name?.split(" - ")[1] || "2025";
 
-                                <div className="p-5">
-                                    {/* Team Name and Category */}
-                                    <div className="flex justify-between items-start mb-4">
-                                        <h3 className="font-bold text-lg text-mentone-navy">{team.name}</h3>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                            team.type === "Senior"
-                                                ? "bg-mentone-skyblue/10 text-mentone-skyblue"
-                                                : team.type === "Junior"
-                                                    ? "bg-mentone-green/10 text-mentone-green"
-                                                    : team.type === "Midweek"
-                                                        ? "bg-mentone-gold/10 text-mentone-charcoal"
-                                                        : "bg-gray-100 text-gray-600"
-                                        }`}>
-                                            {team.type}
-                                        </span>
-                                    </div>
-
-                                    {/* Team Details */}
-                                    <div className="space-y-2 mb-5">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-500">Gender</span>
-                                            <span className="font-medium text-gray-700">{team.gender}</span>
-                                        </div>
-
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-500">Competition</span>
-                                            <span className="font-medium text-gray-700">
-                                                {team.comp_name?.split(" - ")[0] || "Unknown"}
-                                            </span>
-                                        </div>
-
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-500">Season</span>
-                                            <span className="font-medium text-gray-700">
-                                                {team.comp_name?.split(" - ")[1] || "2025"}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Action Button */}
-                                    <div className="flex justify-end">
-                                        <Link
-                                            to={`/teams/${team.id}`}
-                                            className="flex items-center justify-center px-4 py-2 bg-mentone-navy text-white rounded-lg hover:bg-mentone-navy/90 transition-colors font-medium text-sm"
+                                return (
+                                    <tr key={team.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-4 py-2 text-gray-700">{teamName}</td>
+                                        <td className="px-4 py-2 text-gray-700">
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                                    team.type === "Senior"
+                                                        ? "bg-mentone-skyblue/10 text-mentone-skyblue"
+                                                        : team.type === "Junior"
+                                                            ? "bg-mentone-green/10 text-mentone-green"
+                                                            : team.type === "Midweek"
+                                                                ? "bg-mentone-gold/10 text-mentone-charcoal"
+                                                                : "bg-gray-100 text-gray-600"
+                                                }`}>
+                                                    {team.type}
+                                                </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-gray-700">{team.gender}</td>
+                                        <td className="px-4 py-2 text-gray-700">{competitionName}</td>
+                                        <td className="px-4 py-2 text-gray-700">{season}</td>
+                                        <td className="px-4 py-2 text-right">
+                                            <Link
+                                                to={`/teams/${team.id}`}
+                                                className="flex items-center justify-center px-3 py-1 bg-mentone-navy text-white rounded-lg hover:bg-mentone-navy/90 transition-colors font-medium text-sm"
                                             >
-                                            View Team
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </Link>
-
-                                </div>
-                                </div>
-                            </div>
-                        ))}
+                                                View Team
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                </svg>
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </div>
