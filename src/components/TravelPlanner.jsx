@@ -1,64 +1,174 @@
 import { useState, useEffect } from "react";
-import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, where, orderBy, getDocs, limit } from "firebase/firestore";
 import { db } from "../firebase";
+import { useFavorites } from "../context/FavoritesContext";
+import FilterByFavorites from "./common/FilterByFavorites";
 
 const TravelPlanner = () => {
-    // State for games data
     const [games, setGames] = useState([]);
     const [loadingGames, setLoadingGames] = useState(true);
     const [error, setError] = useState(null);
-
-    // State for selected games
     const [firstGame, setFirstGame] = useState(null);
     const [secondGame, setSecondGame] = useState(null);
-
-    // State for travel data
     const [travelData, setTravelData] = useState(null);
     const [loadingTravelData, setLoadingTravelData] = useState(false);
+    const [dateFilter, setDateFilter] = useState("thisWeek");
+    const [mentoneTeams, setMentoneTeams] = useState([]);
+    const [selectedTeams, setSelectedTeams] = useState([]);
+    const [teamFilterOpen, setTeamFilterOpen] = useState(false);
+    const [gradeData, setGradeData] = useState({});
+    const { showOnlyFavorites, favoriteTeams } = useFavorites();
 
-    // Fetch upcoming games from Firebase
     useEffect(() => {
-        const fetchGames = async () => {
+        const fetchMentoneTeams = async () => {
             try {
-                setLoadingGames(true);
-
-                // Get upcoming games (next 14 days)
-                const now = new Date();
-                const twoWeeksLater = new Date();
-                twoWeeksLater.setDate(now.getDate() + 14);
-
-                const gamesQuery = query(
-                    collection(db, "games"),
-                    where("date", ">=", now),
-                    where("date", "<=", twoWeeksLater),
-                    where("mentone_playing", "==", true),
-                    orderBy("date", "asc")
+                const teamsQuery = query(
+                    collection(db, "teams"),
+                    where("is_home_club", "==", true),
+                    orderBy("type"),
+                    orderBy("name"),
+                    limit(100)
                 );
-
-                const querySnapshot = await getDocs(gamesQuery);
-                const gamesData = querySnapshot.docs.map(doc => ({
+                const teamsSnapshot = await getDocs(teamsQuery);
+                const teamsData = teamsSnapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 }));
-
-                // Validate venues exist
-                const validGames = gamesData.filter(game =>
-                    game.venue && typeof game.venue === 'string' && game.venue.trim() !== ''
-                );
-
-                setGames(validGames);
-                setLoadingGames(false);
+                setMentoneTeams(teamsData);
             } catch (err) {
-                console.error("Error fetching games:", err);
+                console.error("Error fetching Mentone teams:", err);
+            }
+        };
+        fetchMentoneTeams();
+    }, []);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                setLoadingGames(true);
+                setError(null);
+
+                const gradesRef = collection(db, "grades");
+                const gradesSnapshot = await getDocs(gradesRef);
+                const gradesMap = {};
+                gradesSnapshot.forEach(doc => {
+                    gradesMap[doc.id] = doc.data();
+                });
+                setGradeData(gradesMap);
+
+                await fetchGames(dateFilter);
+            } catch (err) {
+                console.error("Error fetching data:", err);
                 setError(err.message);
+            } finally {
                 setLoadingGames(false);
             }
         };
+        fetchData();
+    }, [dateFilter]);
 
-        fetchGames();
-    }, []);
+    const getRoundDateRange = (weekOffset = 0) => {
+        const now = new Date();
+        const currentDay = now.getDay();
+        const daysToLastFriday = currentDay >= 5 ? currentDay - 5 : currentDay + 2;
+        const lastFriday = new Date(now);
+        lastFriday.setDate(now.getDate() - daysToLastFriday + (weekOffset * 7));
+        lastFriday.setHours(0, 0, 0, 0);
 
-    // Calculate travel time and distance when two games are selected
+        const nextThursday = new Date(lastFriday);
+        nextThursday.setDate(lastFriday.getDate() + 6);
+        nextThursday.setHours(23, 59, 59, 999);
+
+        return { startDate: lastFriday, endDate: nextThursday };
+    };
+
+    const fetchGames = async (filter) => {
+        try {
+            let dateRanges = [];
+            if (filter === "thisWeek") {
+                dateRanges.push(getRoundDateRange(0));
+            } else if (filter === "nextWeek") {
+                dateRanges.push(getRoundDateRange(1));
+            } else if (filter === "twoWeeks") {
+                dateRanges.push(getRoundDateRange(0), getRoundDateRange(1));
+            } else if (filter === "threeWeeks") {
+                dateRanges.push(getRoundDateRange(0), getRoundDateRange(1), getRoundDateRange(2));
+            } else if (filter === "fourWeeks") {
+                dateRanges.push(getRoundDateRange(0), getRoundDateRange(1), getRoundDateRange(2), getRoundDateRange(3));
+            }
+
+            const gamesData = [];
+            for (const range of dateRanges) {
+                const gamesQuery = query(
+                    collection(db, "games"),
+                    where("date", ">=", range.startDate),
+                    where("date", "<=", range.endDate),
+                    where("mentone_playing", "==", true),
+                    orderBy("date", "asc"),
+                    limit(100)
+                );
+
+                const querySnapshot = await getDocs(gamesQuery);
+                const rangeGames = querySnapshot.docs.map(doc => {
+                    const gameData = doc.data();
+                    return {
+                        id: doc.id,
+                        ...gameData,
+                        roundStartDate: range.startDate,
+                        roundEndDate: range.endDate,
+                        date: gameData.date?.toDate ? gameData.date.toDate() : gameData.date
+                    };
+                });
+                gamesData.push(...rangeGames);
+            }
+
+            const validGames = gamesData.filter(game =>
+                game.venue && typeof game.venue === 'string' && game.venue.trim() !== ''
+            );
+            setGames(validGames);
+        } catch (err) {
+            console.error("Error fetching games:", err);
+            setError(err.message);
+            setGames([]);
+        }
+    };
+
+    const getFilterDateRangeText = (filter) => {
+        let dateRanges = [];
+        if (filter === "thisWeek") dateRanges.push(getRoundDateRange(0));
+        else if (filter === "nextWeek") dateRanges.push(getRoundDateRange(1));
+        else if (filter === "twoWeeks") dateRanges.push(getRoundDateRange(0), getRoundDateRange(1));
+        else if (filter === "threeWeeks") dateRanges.push(getRoundDateRange(0), getRoundDateRange(1), getRoundDateRange(2));
+        else if (filter === "fourWeeks") dateRanges.push(getRoundDateRange(0), getRoundDateRange(1), getRoundDateRange(2), getRoundDateRange(3));
+
+        const formatDate = (date) => date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+        const start = formatDate(dateRanges[0].startDate);
+        const end = formatDate(dateRanges[dateRanges.length - 1].endDate);
+        return `${start} - ${end}`;
+    };
+
+    const filteredGames = selectedTeams.length > 0
+        ? games.filter(game => selectedTeams.some(selectedTeam => selectedTeam.fixture_id === game.fixture_id))
+        : showOnlyFavorites
+            ? games.filter(game => favoriteTeams.some(favTeam => favTeam.fixture_id === game.fixture_id))
+            : games;
+
+    const toggleTeamSelection = (team) => {
+        if (!team.fixture_id) return;
+        setSelectedTeams(prevSelected => {
+            const isSelected = prevSelected.some(t => t.id === team.id);
+            if (isSelected) {
+                return prevSelected.filter(t => t.id !== team.id);
+            } else {
+                return [...prevSelected, { id: team.id, fixture_id: team.fixture_id, name: team.name }];
+            }
+        });
+    };
+
+    const clearTeamSelections = () => {
+        setSelectedTeams([]);
+    };
+
     useEffect(() => {
         if (firstGame && secondGame) {
             calculateTravelData();
@@ -67,44 +177,41 @@ const TravelPlanner = () => {
         }
     }, [firstGame, secondGame]);
 
-    // Format date as "Saturday 26 Apr @ 14:30"
-    const formatGameDateTime = (date) => {
+    const formatGameDate = (date) => {
         if (!date) return "TBD";
-        const gameDate = date.toDate ? date.toDate() : new Date(date);
-        const dayStr = gameDate.toLocaleDateString('en-AU', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'short',
-            timeZone: 'Australia/Melbourne'
-        });
-        const timeStr = gameDate.toLocaleTimeString('en-AU', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-            timeZone: 'Australia/Melbourne'
-        });
-        return `${dayStr} @ ${timeStr}`;
+        const gameDate = date instanceof Date ? date : new Date(date);
+        return gameDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' });
     };
 
-    // Calculate travel data using Google Maps Distance Matrix API via Cloud Function
+    const formatGameTime = (date) => {
+        if (!date) return "TBD";
+        const gameDate = date instanceof Date ? date : new Date(date);
+        return gameDate.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
+    };
+
+    const getCompetitionName = (game) => {
+        const fixtureId = game.fixture_id;
+        return fixtureId && gradeData[fixtureId] ? gradeData[fixtureId].name?.replace(/ - \d{4}$/, "") || `Grade ${fixtureId}` : "Unknown Competition";
+    };
+
+    const getOpponentTeam = (game) => {
+        const isMentoneHome = game.home_team?.club?.toLowerCase().includes("mentone");
+        return isMentoneHome ? game.away_team : game.home_team;
+    };
+
     const calculateTravelData = async () => {
         if (!firstGame?.venue || !secondGame?.venue) return;
 
         setLoadingTravelData(true);
 
         try {
-            // Import Firebase functions
             const { getFunctions, httpsCallable } = await import("firebase/functions");
-
-            // Get a reference to the function
             const functions = getFunctions();
             const calculateTravelTime = httpsCallable(functions, 'calculateTravelTime');
 
-            // Add "Victoria, Australia" to make venues more specific for Google Maps
             const originVenue = `${firstGame.venue}, Victoria, Australia`;
             const destinationVenue = `${secondGame.venue}, Victoria, Australia`;
 
-            // Call the Cloud Function
             const result = await calculateTravelTime({
                 origin: originVenue,
                 destination: destinationVenue,
@@ -112,10 +219,7 @@ const TravelPlanner = () => {
                 units: 'metric'
             });
 
-            // Process the response data
             const response = result.data;
-
-            // Convert meters to kilometers and seconds to minutes
             const distanceKm = (response.distance.value / 1000).toFixed(1);
             const durationMinutes = Math.round(response.duration.value / 60);
 
@@ -127,19 +231,13 @@ const TravelPlanner = () => {
                 distanceText: response.distance.text,
                 durationText: response.duration.text
             });
-
         } catch (err) {
             console.error("Error calculating travel data:", err);
-
-            // Fallback to simulated data for demo/development purposes
             console.warn("Falling back to simulated travel data");
 
-            // Calculate distance based on venue names (DEMO ONLY - not for production)
             const venueDistance = Math.abs(
                 (firstGame.venue.length * 324) - (secondGame.venue.length * 278)
-            ) % 25 + 5; // Random-ish distance between 5-30 km
-
-            // Calculate time (roughly 2 mins per km, plus random factor)
+            ) % 25 + 5;
             const travelTimeMinutes = Math.round(venueDistance * 2 + Math.random() * 10);
 
             setTravelData({
@@ -153,24 +251,20 @@ const TravelPlanner = () => {
         }
     };
 
-    // Handle game selection
     const handleSelectGame = (game, position) => {
         if (position === 'first') {
             setFirstGame(game);
-            // If second game is the same as the new first game, clear second game
             if (secondGame && secondGame.id === game.id) {
                 setSecondGame(null);
             }
         } else {
             setSecondGame(game);
-            // If first game is the same as the new second game, clear first game
             if (firstGame && firstGame.id === game.id) {
                 setFirstGame(null);
             }
         }
     };
 
-    // Get Google Maps directions URL
     const getDirectionsUrl = () => {
         if (!firstGame?.venue || !secondGame?.venue) return '#';
 
@@ -180,7 +274,6 @@ const TravelPlanner = () => {
         return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
     };
 
-    // Render loading state
     if (loadingGames) {
         return (
             <div className="flex items-center justify-center h-64 bg-white rounded-xl shadow-sm">
@@ -192,7 +285,6 @@ const TravelPlanner = () => {
         );
     }
 
-    // Render error state
     if (error) {
         return (
             <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-red-600">
@@ -202,30 +294,205 @@ const TravelPlanner = () => {
         );
     }
 
+    const teamsByType = mentoneTeams.reduce((acc, team) => {
+        const type = team.type || "Other";
+        if (!acc[type]) acc[type] = [];
+        acc[type].push(team);
+        return acc;
+    }, {});
+
     return (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-mentone-navy to-mentone-navy/90 p-5">
-                <h2 className="text-2xl font-bold text-mentone-gold tracking-tight">Travel Planner</h2>
-                <p className="text-mentone-skyblue text-sm mt-1">
-                    Select two games to calculate travel time between venues
-                </p>
+            <div className="bg-gradient-to-r from-mentone-navy to-mentone-navy/90 p-5 flex justify-between items-center">
+                <div>
+                    <h2 className="text-2xl font-bold text-mentone-gold tracking-tight">Travel Planner</h2>
+                    <p className="text-mentone-skyblue text-sm mt-1">
+                        Select two games to calculate travel time between venues
+                    </p>
+                </div>
+                <div className="bg-mentone-navy/50 backdrop-blur-sm rounded-lg p-1 flex">
+                    {[
+                        { value: "thisWeek", label: "This Round" },
+                        { value: "nextWeek", label: "Next Round" },
+                        { value: "twoWeeks", label: "Two Rounds" },
+                        { value: "threeWeeks", label: "Three Rounds" },
+                        { value: "fourWeeks", label: "Four Rounds" }
+                    ].map((filter) => (
+                        <button
+                            key={filter.value}
+                            onClick={() => setDateFilter(filter.value)}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                                dateFilter === filter.value
+                                    ? "bg-mentone-skyblue text-white shadow-sm"
+                                    : "text-white/80 hover:bg-mentone-navy/70 hover:text-white"
+                            }`}
+                        >
+                            {filter.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            {/* Game Selection */}
+            <div className="bg-mentone-navy/5 px-5 py-2 border-b border-gray-100 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                    <p className="text-mentone-navy text-sm font-medium">
+                        Showing games: {getFilterDateRangeText(dateFilter)}
+                    </p>
+                    <FilterByFavorites buttonSize="sm" variant="outline" />
+                    <div className="relative">
+                        <button
+                            onClick={() => setTeamFilterOpen(!teamFilterOpen)}
+                            className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+                                selectedTeams.length > 0
+                                    ? "bg-mentone-skyblue text-white border-mentone-skyblue"
+                                    : "bg-white text-mentone-navy border-gray-300 hover:border-mentone-skyblue"
+                            }`}
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+                                />
+                            </svg>
+                            {selectedTeams.length === 0 ? <span>Filter Teams</span> : <span>{selectedTeams.length} team{selectedTeams.length !== 1 ? 's' : ''} selected</span>}
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className={`h-4 w-4 transition-transform ${teamFilterOpen ? 'rotate-180' : ''}`}
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 9l-7 7-7-7"
+                                />
+                            </svg>
+                        </button>
+                        {teamFilterOpen && (
+                            <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg w-72 max-h-96 overflow-y-auto">
+                                <div className="sticky top-0 bg-white px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+                                    <h3 className="text-sm font-semibold text-mentone-navy">Filter by team</h3>
+                                    <button
+                                        onClick={clearTeamSelections}
+                                        className="text-xs text-mentone-skyblue hover:text-mentone-navy"
+                                    >
+                                        Clear all
+                                    </button>
+                                </div>
+                                <div className="p-2">
+                                    {mentoneTeams.length === 0 ? (
+                                        <div className="py-3 px-2 text-sm text-gray-500 text-center">
+                                            Loading teams...
+                                        </div>
+                                    ) : (
+                                        Object.entries(teamsByType).map(([type, typeTeams]) => (
+                                            <div key={type} className="mb-3">
+                                                <h4 className="text-xs font-bold px-2 py-1 bg-gray-100 rounded-md text-mentone-navy mb-1">
+                                                    {type}
+                                                </h4>
+                                                <div className="space-y-1">
+                                                    {typeTeams.map(team => {
+                                                        const compName = team.name.includes(" - ") ? team.name.split(" - ")[1] : team.name;
+                                                        const isSelected = selectedTeams.some(t => t.id === team.id);
+                                                        const isDisabled = !team.fixture_id;
+                                                        return (
+                                                            <div
+                                                                key={team.id}
+                                                                className={`flex items-center pl-2 ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    id={`team-${team.id}`}
+                                                                    checked={isSelected}
+                                                                    onChange={() => toggleTeamSelection(team)}
+                                                                    disabled={isDisabled}
+                                                                    className="h-4 w-4 text-mentone-skyblue rounded border-gray-300 focus:ring-mentone-skyblue disabled:text-gray-400"
+                                                                />
+                                                                <label
+                                                                    htmlFor={`team-${team.id}`}
+                                                                    title={isDisabled ? `Cannot filter by this team (missing fixture_id)` : compName}
+                                                                    className={`ml-2 text-sm text-gray-700 ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                >
+                                                                    {compName}
+                                                                </label>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {selectedTeams.length > 0 && (
+                <div className="bg-mentone-skyblue/5 px-5 py-2 border-b border-mentone-skyblue/10">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-mentone-navy">Active filters:</span>
+                        {selectedTeams.map(team => {
+                            const compName = team.name.includes(" - ") ? team.name.split(" - ")[1] : team.name;
+                            return (
+                                <div
+                                    key={team.id}
+                                    className="bg-mentone-skyblue/10 text-mentone-skyblue text-xs px-2 py-1 rounded-full flex items-center"
+                                >
+                                    <span className="mr-1">{compName}</span>
+                                    <button
+                                        onClick={() => toggleTeamSelection(team)}
+                                        className="hover:text-mentone-navy"
+                                        title={`Remove ${compName} filter`}
+                                    >
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            className="h-3 w-3"
+                                            viewBox="0 0 20 20"
+                                            fill="currentColor"
+                                        >
+                                            <path
+                                                fillRule="evenodd"
+                                                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                                clipRule="evenodd"
+                                            />
+                                        </svg>
+                                    </button>
+                                </div>
+                            );
+                        })}
+                        <button
+                            onClick={clearTeamSelections}
+                            className="text-xs text-mentone-skyblue hover:text-mentone-navy ml-1"
+                        >
+                            Clear all
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* First Game Selection */}
                 <div>
                     <h3 className="text-lg font-semibold text-mentone-navy mb-3">First Game</h3>
                     <div className="bg-mentone-offwhite rounded-lg p-4 min-h-[200px]">
                         {firstGame ? (
                             <div className="bg-white p-4 rounded-lg border border-mentone-skyblue/20 shadow-sm">
                                 <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h4 className="font-bold text-mentone-navy">
-                                            {firstGame.home_team?.club === "Mentone" ? "Mentone" : firstGame.home_team?.name} vs {firstGame.away_team?.club === "Mentone" ? "Mentone" : firstGame.away_team?.name}
-                                        </h4>
-                                        <p className="text-sm text-gray-600 mt-1">{formatGameDateTime(firstGame.date)}</p>
+                                    <div className="text-center w-full">
+                                        <h4 className="font-bold text-mentone-navy">{getCompetitionName(firstGame)}</h4>
+                                        <p className="text-sm text-gray-600 mt-1">Playing: {getOpponentTeam(firstGame)?.name || "TBD"}</p>
+                                        <p className="text-sm text-gray-600">{formatGameDate(firstGame.date)} at {formatGameTime(firstGame.date)}</p>
                                     </div>
                                     <button
                                         onClick={() => setFirstGame(null)}
@@ -255,18 +522,16 @@ const TravelPlanner = () => {
                     </div>
                 </div>
 
-                {/* Second Game Selection */}
                 <div>
                     <h3 className="text-lg font-semibold text-mentone-navy mb-3">Second Game</h3>
                     <div className="bg-mentone-offwhite rounded-lg p-4 min-h-[200px]">
                         {secondGame ? (
                             <div className="bg-white p-4 rounded-lg border border-mentone-skyblue/20 shadow-sm">
                                 <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h4 className="font-bold text-mentone-navy">
-                                            {secondGame.home_team?.club === "Mentone" ? "Mentone" : secondGame.home_team?.name} vs {secondGame.away_team?.club === "Mentone" ? "Mentone" : secondGame.away_team?.name}
-                                        </h4>
-                                        <p className="text-sm text-gray-600 mt-1">{formatGameDateTime(secondGame.date)}</p>
+                                    <div className="text-center w-full">
+                                        <h4 className="font-bold text-mentone-navy">{getCompetitionName(secondGame)}</h4>
+                                        <p className="text-sm text-gray-600 mt-1">Playing: {getOpponentTeam(secondGame)?.name || "TBD"}</p>
+                                        <p className="text-sm text-gray-600">{formatGameDate(secondGame.date)} at {formatGameTime(secondGame.date)}</p>
                                     </div>
                                     <button
                                         onClick={() => setSecondGame(null)}
@@ -297,7 +562,6 @@ const TravelPlanner = () => {
                 </div>
             </div>
 
-            {/* Travel Result */}
             {(firstGame && secondGame) && (
                 <div className="px-5 pb-5">
                     <div className="bg-mentone-gold/10 rounded-lg p-4 border border-mentone-gold/20">
@@ -357,25 +621,21 @@ const TravelPlanner = () => {
                 </div>
             )}
 
-            {/* Game List */}
             <div className="border-t border-gray-200 px-5 py-4">
                 <h3 className="text-lg font-semibold text-mentone-navy mb-3">Upcoming Games</h3>
 
-                {games.length === 0 ? (
+                {filteredGames.length === 0 ? (
                     <div className="text-center py-6 bg-gray-50 rounded-lg text-gray-500">
                         No upcoming games found.
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {games.map(game => (
+                        {filteredGames.map(game => (
                             <div key={game.id} className="border border-gray-200 rounded-lg bg-white hover:shadow-md transition-shadow p-3">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <h4 className="font-medium text-mentone-navy">
-                                            {game.home_team?.club === "Mentone" ? "Mentone" : game.home_team?.name} vs {game.away_team?.club === "Mentone" ? "Mentone" : game.away_team?.name}
-                                        </h4>
-                                        <p className="text-sm text-gray-600">{formatGameDateTime(game.date)}</p>
-                                    </div>
+                                <div className="text-center mb-2">
+                                    <h4 className="font-medium text-mentone-navy">{getCompetitionName(game)}</h4>
+                                    <p className="text-sm text-gray-600">Playing: {getOpponentTeam(game)?.name || "TBD"}</p>
+                                    <p className="text-sm text-gray-600">{formatGameDate(game.date)} at {formatGameTime(game.date)}</p>
                                 </div>
                                 <div className="flex items-center text-sm text-gray-600 mb-3">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -384,7 +644,7 @@ const TravelPlanner = () => {
                                     </svg>
                                     <span>{game.venue || "Venue TBD"}</span>
                                 </div>
-                                <div className="flex space-x-2">
+                                <div className="flex justify-between">
                                     <button
                                         onClick={() => handleSelectGame(game, 'first')}
                                         className={`px-3 py-1 text-xs rounded-full border transition-colors ${

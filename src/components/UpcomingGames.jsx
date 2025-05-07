@@ -5,7 +5,6 @@ import { useFavorites } from "../context/FavoritesContext";
 import FilterByFavorites from "./common/FilterByFavorites";
 import FavoriteButton from "./common/FavoriteButton";
 
-
 const UpcomingGames = () => {
     const [games, setGames] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -16,12 +15,10 @@ const UpcomingGames = () => {
     const tableContainerRef = useRef(null);
     const { showOnlyFavorites, favoriteTeams } = useFavorites();
 
-    // Team filtering state
     const [mentoneTeams, setMentoneTeams] = useState([]);
-    const [selectedTeams, setSelectedTeams] = useState([]); // Stores { id, fixture_id, name }
+    const [selectedTeams, setSelectedTeams] = useState([]);
     const [teamFilterOpen, setTeamFilterOpen] = useState(false);
 
-    // Fetch mentone teams
     useEffect(() => {
         const fetchMentoneTeams = async () => {
             try {
@@ -34,53 +31,32 @@ const UpcomingGames = () => {
                 );
 
                 const teamsSnapshot = await getDocs(teamsQuery);
-
-                if (teamsSnapshot.empty) {
-                    console.warn("No Mentone teams found in database");
-                    setMentoneTeams([]);
-                } else {
-                    const teamsData = teamsSnapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-
-                    // Validation: Check if teams have fixture_id
-                    const teamsWithoutFixtureId = teamsData.filter(t => !t.fixture_id);
-                    if (teamsWithoutFixtureId.length > 0) {
-                        console.warn(`Warning: ${teamsWithoutFixtureId.length} Mentone teams missing 'fixture_id'. Filtering might be incomplete.`, teamsWithoutFixtureId.map(t => t.name));
-                    }
-
-                    console.log(`Loaded ${teamsData.length} Mentone teams`);
-                    setMentoneTeams(teamsData);
-                }
+                const teamsData = teamsSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                setMentoneTeams(teamsData);
             } catch (err) {
                 console.error("Error fetching Mentone teams:", err);
             }
         };
-
         fetchMentoneTeams();
     }, []);
 
-    // Fetch games and grade data
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true);
                 setError(null);
 
-                // Fetch all grades
                 const gradesRef = collection(db, "grades");
                 const gradesSnapshot = await getDocs(gradesRef);
-
                 const gradesMap = {};
                 gradesSnapshot.forEach(doc => {
-                    const data = doc.data();
-                    gradesMap[doc.id] = data;
+                    gradesMap[doc.id] = doc.data();
                 });
-
                 setGradeData(gradesMap);
 
-                // Fetch games
                 await fetchUpcomingGames(dateFilter);
             } catch (err) {
                 console.error("Error fetching data:", err);
@@ -89,11 +65,9 @@ const UpcomingGames = () => {
                 setLoading(false);
             }
         };
-
         fetchData();
     }, [dateFilter]);
 
-    // Get current round date range (Friday to Wednesday)
     const getRoundDateRange = (weekOffset = 0) => {
         const now = new Date();
         const currentDay = now.getDay();
@@ -102,55 +76,52 @@ const UpcomingGames = () => {
         lastFriday.setDate(now.getDate() - daysToLastFriday + (weekOffset * 7));
         lastFriday.setHours(0, 0, 0, 0);
 
-        const nextWednesday = new Date(lastFriday);
-        nextWednesday.setDate(lastFriday.getDate() + 5);
-        nextWednesday.setHours(23, 59, 59, 999);
+        const nextThursday = new Date(lastFriday);
+        nextThursday.setDate(lastFriday.getDate() + 6);
+        nextThursday.setHours(23, 59, 59, 999);
 
-        return { startDate: lastFriday, endDate: nextWednesday };
+        return { startDate: lastFriday, endDate: nextThursday };
     };
 
-    // Function to fetch games
     const fetchUpcomingGames = async (filter) => {
         try {
-            let dateRange;
-
+            let dateRanges = [];
             if (filter === "thisWeek") {
-                dateRange = getRoundDateRange(0);
+                dateRanges.push(getRoundDateRange(0));
             } else if (filter === "nextWeek") {
-                dateRange = getRoundDateRange(1);
+                dateRanges.push(getRoundDateRange(1));
             } else if (filter === "twoWeeks") {
-                const currentRound = getRoundDateRange(0);
-                const nextRound = getRoundDateRange(1);
-                dateRange = {
-                    startDate: currentRound.startDate,
-                    endDate: nextRound.endDate
-                };
+                dateRanges.push(getRoundDateRange(0), getRoundDateRange(1));
+            } else if (filter === "threeWeeks") {
+                dateRanges.push(getRoundDateRange(0), getRoundDateRange(1), getRoundDateRange(2));
+            } else if (filter === "fourWeeks") {
+                dateRanges.push(getRoundDateRange(0), getRoundDateRange(1), getRoundDateRange(2), getRoundDateRange(3));
             }
 
-            console.log(`Fetching games from ${dateRange.startDate.toISOString()} to ${dateRange.endDate.toISOString()}`);
+            const gamesData = [];
+            for (const range of dateRanges) {
+                const gamesQuery = query(
+                    collection(db, "games"),
+                    where("date", ">=", range.startDate),
+                    where("date", "<=", range.endDate),
+                    where("mentone_playing", "==", true),
+                    orderBy("date", "asc"),
+                    limit(100)
+                );
 
-            const gamesQuery = query(
-                collection(db, "games"),
-                where("date", ">=", dateRange.startDate),
-                where("date", "<=", dateRange.endDate),
-                where("mentone_playing", "==", true),
-                orderBy("date", "asc"),
-                limit(100)
-            );
-
-            const querySnapshot = await getDocs(gamesQuery);
-            const gamesData = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-
-            console.log(`Fetched ${gamesData.length} games where mentone_playing is true.`);
-
-            const gamesWithoutFixtureId = gamesData.filter(g => !g.fixture_id);
-            if (gamesWithoutFixtureId.length > 0) {
-                console.warn(`Warning: ${gamesWithoutFixtureId.length} fetched games missing 'fixture_id'. Competition naming/filtering might be incomplete.`);
+                const querySnapshot = await getDocs(gamesQuery);
+                const rangeGames = querySnapshot.docs.map(doc => {
+                    const gameData = doc.data();
+                    return {
+                        id: doc.id,
+                        ...gameData,
+                        roundStartDate: range.startDate,
+                        roundEndDate: range.endDate,
+                        date: gameData.date?.toDate ? gameData.date.toDate() : gameData.date
+                    };
+                });
+                gamesData.push(...rangeGames);
             }
-
             setGames(gamesData);
         } catch (err) {
             console.error("Error fetching upcoming games:", err);
@@ -159,110 +130,74 @@ const UpcomingGames = () => {
         }
     };
 
-    // Apply team filters
     const filteredGames = selectedTeams.length > 0
-        ? games.filter(game => {
-            // Game must have a fixture_id to be filterable by team selection
-            if (!game.fixture_id) return false;
-
-            // Check if the game's fixture_id matches any selected team's fixture_id
-            return selectedTeams.some(selectedTeam =>
-                selectedTeam.fixture_id === game.fixture_id
-            );
-        })
+        ? games.filter(game => selectedTeams.some(selectedTeam => selectedTeam.fixture_id === game.fixture_id))
         : showOnlyFavorites
-            ? games.filter(game => {
-                // If showing only favorites, check if game fixture_id is in any favorite team's fixture_id
-                return favoriteTeams.some(favTeam => favTeam.fixture_id === game.fixture_id);
-            })
-            : games; // If no teams selected and not filtering by favorites, show all fetched games
+            ? games.filter(game => favoriteTeams.some(favTeam => favTeam.fixture_id === game.fixture_id))
+            : games;
 
-    // Handler for toggling team selection
     const toggleTeamSelection = (team) => {
-        if (!team.fixture_id) {
-            console.warn(`Cannot select team "${team.name}" (ID: ${team.id}) as it lacks a fixture_id.`);
-            return;
-        }
+        if (!team.fixture_id) return;
         setSelectedTeams(prevSelected => {
             const isSelected = prevSelected.some(t => t.id === team.id);
             if (isSelected) {
                 return prevSelected.filter(t => t.id !== team.id);
             } else {
-                return [...prevSelected, {
-                    id: team.id,
-                    fixture_id: team.fixture_id,
-                    name: team.name
-                }];
+                return [...prevSelected, { id: team.id, fixture_id: team.fixture_id, name: team.name }];
             }
         });
     };
 
-    // Handler for clearing all team selections
     const clearTeamSelections = () => {
         setSelectedTeams([]);
     };
 
-    // Get human-readable date range for filter
     const getFilterDateRangeText = (filter) => {
-        let dateRange;
-        if (filter === "thisWeek") dateRange = getRoundDateRange(0);
-        else if (filter === "nextWeek") dateRange = getRoundDateRange(1);
-        else if (filter === "twoWeeks") {
-            const currentRound = getRoundDateRange(0);
-            const nextRound = getRoundDateRange(1);
-            dateRange = { startDate: currentRound.startDate, endDate: nextRound.endDate };
-        }
+        let dateRanges = [];
+        if (filter === "thisWeek") dateRanges.push(getRoundDateRange(0));
+        else if (filter === "nextWeek") dateRanges.push(getRoundDateRange(1));
+        else if (filter === "twoWeeks") dateRanges.push(getRoundDateRange(0), getRoundDateRange(1));
+        else if (filter === "threeWeeks") dateRanges.push(getRoundDateRange(0), getRoundDateRange(1), getRoundDateRange(2));
+        else if (filter === "fourWeeks") dateRanges.push(getRoundDateRange(0), getRoundDateRange(1), getRoundDateRange(2), getRoundDateRange(3));
 
         const formatDate = (date) => date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
-        return `${formatDate(dateRange.startDate)} - ${formatDate(dateRange.endDate)}`;
+        const start = formatDate(dateRanges[0].startDate);
+        const end = formatDate(dateRanges[dateRanges.length - 1].endDate);
+        return `${start} - ${end}`;
     };
 
-    // Get competition name by fixture ID
+    const getRoundDateRangeText = (startDate, endDate) => {
+        const formatDate = (date) => date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+        return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    };
+
     const getCompetitionName = (game) => {
         const fixtureId = game.fixture_id;
-        if (fixtureId && gradeData[fixtureId]) {
-            const gradeName = gradeData[fixtureId].name || `Grade ${fixtureId}`;
-            return gradeName.replace(/ - \d{4}$/, "");
-        }
-        return `Unknown Competition`;
+        return fixtureId && gradeData[fixtureId] ? gradeData[fixtureId].name?.replace(/ - \d{4}$/, "") || `Grade ${fixtureId}` : "Unknown Competition";
     };
 
-    // Get opponent team
     const getOpponentTeam = (game) => {
         const isMentoneHome = game.home_team?.club?.toLowerCase().includes("mentone");
         return isMentoneHome ? game.away_team : game.home_team;
     };
 
-    // Format date as "Saturday 26 Apr"
     const formatGameDate = (date) => {
         if (!date) return "TBD";
-        const gameDate = date.toDate ? date.toDate() : new Date(date);
-        return gameDate.toLocaleDateString('en-AU', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'short',
-            timeZone: 'UTC'
-        });
+        const gameDate = date instanceof Date ? date : new Date(date);
+        return gameDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' });
     };
 
-    // Format time only (HH:MM)
     const formatGameTime = (date) => {
         if (!date) return "TBD";
-        const gameDate = date.toDate ? date.toDate() : new Date(date);
-        return gameDate.toLocaleTimeString('en-AU', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-            timeZone: 'UTC'
-        });
+        const gameDate = date instanceof Date ? date : new Date(date);
+        return gameDate.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
     };
 
-    // Generate HTML table for games
-    const generateHTMLTable = () => {
-        if (filteredGames.length === 0) return "<p>No upcoming games found for the selected criteria.</p>";
+    const generateHTMLTable = (roundGames, roundRangeText) => {
+        if (roundGames.length === 0) return "<p>No upcoming games found for this round.</p>";
 
         let html = `<div style="font-family: Arial, sans-serif; max-width: 100%;">
-            <h2 style="text-align: center; color: #1B1F4A; margin-bottom: 20px;">MENTONE HOCKEY CLUB - UPCOMING GAMES (${getFilterDateRangeText(dateFilter)})</h2>
+            <h2 style="text-align: center; color: #1B1F4A; margin-bottom: 20px;">MENTONE HOCKEY CLUB - UPCOMING GAMES (${roundRangeText})</h2>
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                 <tr style="background-color: #f2f2f2;">
                     <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Date</th>
@@ -272,14 +207,13 @@ const UpcomingGames = () => {
                     <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Venue</th>
                 </tr>`;
 
-        filteredGames.forEach((game, index) => {
+        roundGames.forEach((game, index) => {
             const date = formatGameDate(game.date);
             const time = formatGameTime(game.date);
             const opponent = getOpponentTeam(game);
             const opponentName = opponent?.name?.replace(" Hockey Club", "") || "TBD";
             const competition = getCompetitionName(game);
             const venue = game.venue || "Venue TBD";
-
             const rowStyle = index % 2 === 0 ? "" : "background-color: #f9f9f9;";
 
             html += `
@@ -296,9 +230,8 @@ const UpcomingGames = () => {
         return html;
     };
 
-    // Copy HTML to clipboard
-    const copyHTMLToClipboard = () => {
-        const htmlContent = generateHTMLTable();
+    const copyHTMLToClipboard = (roundGames, roundRangeText) => {
+        const htmlContent = generateHTMLTable(roundGames, roundRangeText);
         const tempEl = document.createElement('div');
         tempEl.innerHTML = htmlContent;
         document.body.appendChild(tempEl);
@@ -321,7 +254,6 @@ const UpcomingGames = () => {
         }
     };
 
-    // Render loading state
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64 bg-white rounded-xl shadow-sm">
@@ -333,7 +265,6 @@ const UpcomingGames = () => {
         );
     }
 
-    // Render error state
     if (error) {
         return (
             <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-red-600">
@@ -343,7 +274,6 @@ const UpcomingGames = () => {
         );
     }
 
-    // Prepare data for rendering
     const teamsByType = mentoneTeams.reduce((acc, team) => {
         const type = team.type || "Other";
         if (!acc[type]) acc[type] = [];
@@ -351,17 +281,36 @@ const UpcomingGames = () => {
         return acc;
     }, {});
 
-    // Render
+    const gamesByRound = filteredGames.reduce((acc, game) => {
+        if (!game.roundStartDate || !game.roundEndDate) {
+            console.warn(`Game ${game.id} missing round dates, skipping grouping:`, game);
+            return acc;
+        }
+        const key = `${game.roundStartDate.getTime()}-${game.roundEndDate.getTime()}`;
+        if (!acc[key]) {
+            acc[key] = {
+                startDate: game.roundStartDate,
+                endDate: game.roundEndDate,
+                games: []
+            };
+        }
+        acc[key].games.push(game);
+        return acc;
+    }, {});
+
+    const sortedRounds = Object.values(gamesByRound).sort((a, b) => a.startDate - b.startDate);
+
     return (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {/* Header section */}
             <div className="bg-gradient-to-r from-mentone-navy to-mentone-navy/90 p-5 flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-mentone-gold tracking-tight">Upcoming Games</h2>
                 <div className="bg-mentone-navy/50 backdrop-blur-sm rounded-lg p-1 flex">
                     {[
                         { value: "thisWeek", label: "This Round" },
                         { value: "nextWeek", label: "Next Round" },
-                        { value: "twoWeeks", label: "Two Rounds" }
+                        { value: "twoWeeks", label: "Two Rounds" },
+                        { value: "threeWeeks", label: "Three Rounds" },
+                        { value: "fourWeeks", label: "Four Rounds" }
                     ].map((filter) => (
                         <button
                             key={filter.value}
@@ -378,17 +327,12 @@ const UpcomingGames = () => {
                 </div>
             </div>
 
-            {/* Controls: Date range, Team filter */}
             <div className="bg-mentone-navy/5 px-5 py-2 border-b border-gray-100 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    {/* Date Range Display */}
                     <p className="text-mentone-navy text-sm font-medium">
                         Showing games: {getFilterDateRangeText(dateFilter)}
                     </p>
-                    {/* Add the FilterByFavorites button here */}
                     <FilterByFavorites buttonSize="sm" variant="outline" />
-
-                    {/* Team filter dropdown */}
                     <div className="relative">
                         <button
                             onClick={() => setTeamFilterOpen(!teamFilterOpen)}
@@ -412,13 +356,7 @@ const UpcomingGames = () => {
                                     d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
                                 />
                             </svg>
-                            {selectedTeams.length === 0 ? (
-                                <span>Filter Teams</span>
-                            ) : (
-                                <span>
-                                    {selectedTeams.length} team{selectedTeams.length !== 1 ? 's' : ''} selected
-                                </span>
-                            )}
+                            {selectedTeams.length === 0 ? <span>Filter Teams</span> : <span>{selectedTeams.length} team{selectedTeams.length !== 1 ? 's' : ''} selected</span>}
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
                                 className={`h-4 w-4 transition-transform ${teamFilterOpen ? 'rotate-180' : ''}`}
@@ -434,7 +372,6 @@ const UpcomingGames = () => {
                                 />
                             </svg>
                         </button>
-
                         {teamFilterOpen && (
                             <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg w-72 max-h-96 overflow-y-auto">
                                 <div className="sticky top-0 bg-white px-4 py-2 border-b border-gray-100 flex justify-between items-center">
@@ -496,7 +433,6 @@ const UpcomingGames = () => {
                 </div>
             </div>
 
-            {/* Show active filters if teams are selected */}
             {selectedTeams.length > 0 && (
                 <div className="bg-mentone-skyblue/5 px-5 py-2 border-b border-mentone-skyblue/10">
                     <div className="flex flex-wrap items-center gap-2">
@@ -540,9 +476,8 @@ const UpcomingGames = () => {
                 </div>
             )}
 
-            {/* Game listings - Single Table View */}
-            <div className="p-3">
-                {filteredGames.length === 0 ? (
+            <div className="p-3 min-h-[400px] flex flex-col">
+                {sortedRounds.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 bg-gray-50 rounded border border-gray-100">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -564,72 +499,55 @@ const UpcomingGames = () => {
                         </p>
                     </div>
                 ) : (
-                    <div>
-                        {/* Copy button */}
-                        <div className="flex justify-end mb-2">
-                            <button
-                                onClick={copyHTMLToClipboard}
-                                className={`px-3 py-1 rounded text-white text-xs flex items-center ${
-                                    textCopied ? 'bg-green-600' : 'bg-mentone-skyblue hover:bg-mentone-skyblue/90'
-                                } transition-colors`}
-                            >
-                                {textCopied ? (
-                                    <>✓ Copied!</>
-                                ) : (
-                                    <>⧉ Copy HTML</>
-                                )}
-                            </button>
+                    sortedRounds.map((round, roundIndex) => (
+                        <div key={`${round.startDate.getTime()}-${round.endDate.getTime()}`} className="mb-6">
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="text-lg font-semibold text-mentone-navy">
+                                    {getRoundDateRangeText(round.startDate, round.endDate)}
+                                </h3>
+                                <button
+                                    onClick={() => copyHTMLToClipboard(round.games, getRoundDateRangeText(round.startDate, round.endDate))}
+                                    className={`px-3 py-1 rounded text-white text-xs flex items-center ${
+                                        textCopied ? 'bg-green-600' : 'bg-mentone-skyblue hover:bg-mentone-skyblue/90'
+                                    } transition-colors`}
+                                >
+                                    {textCopied ? <>✓ Copied!</> : <>⧉ Copy HTML</>}
+                                </button>
+                            </div>
+                            <div ref={tableContainerRef} className="overflow-auto bg-white rounded border border-gray-200">
+                                <table className="min-w-full divide-y divide-gray-200 text-xs">
+                                    <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Date</th>
+                                        <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Time</th>
+                                        <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Competition</th>
+                                        <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Opponent</th>
+                                        <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Venue</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                    {round.games.map((game, index) => {
+                                        const opponentTeam = getOpponentTeam(game);
+                                        const opponentName = opponentTeam?.name?.replace(" Hockey Club", "") || opponentTeam?.club?.replace(" Hockey Club", "") || "TBD";
+                                        const competitionName = getCompetitionName(game);
+                                        return (
+                                            <tr key={game.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                                <td className="px-2 py-1 text-left text-gray-600 whitespace-nowrap">{formatGameDate(game.date)}</td>
+                                                <td className="px-2 py-1 text-left text-gray-600 whitespace-nowrap">{formatGameTime(game.date)}</td>
+                                                <td className="px-2 py-1 text-left text-gray-800 whitespace-nowrap">{competitionName}</td>
+                                                <td className="px-2 py-1 text-left text-gray-800 whitespace-nowrap">{opponentName}</td>
+                                                <td className="px-2 py-1 text-left text-gray-600 whitespace-nowrap">{(game.venue || "Venue TBD").trim()}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-
-                        {/* Single Table Display */}
-                        <div ref={tableContainerRef} className="overflow-auto bg-white rounded border border-gray-200">
-                            <table className="min-w-full divide-y divide-gray-200 text-xs">
-                                <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Date</th>
-                                    <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Time</th>
-                                    <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Competition</th>
-                                    <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Opponent</th>
-                                    <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Venue</th>
-                                </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                {filteredGames.map((game, index) => {
-                                    const opponentTeam = getOpponentTeam(game);
-                                    const opponentName =
-                                        opponentTeam?.name?.replace(" Hockey Club", "") ||
-                                        opponentTeam?.club?.replace(" Hockey Club", "") ||
-                                        "TBD";
-                                    const competitionName = getCompetitionName(game);
-
-                                    return (
-                                        <tr key={game.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                            <td className="px-2 py-1 text-left text-gray-600 whitespace-nowrap">
-                                                {formatGameDate(game.date)}
-                                            </td>
-                                            <td className="px-2 py-1 text-left text-gray-600 whitespace-nowrap">
-                                                {formatGameTime(game.date)}
-                                            </td>
-                                            <td className="px-2 py-1 text-left text-gray-800 whitespace-nowrap">
-                                                {competitionName}
-                                            </td>
-                                            <td className="px-2 py-1 text-left text-gray-800 whitespace-nowrap">
-                                                {opponentName}
-                                            </td>
-                                            <td className="px-2 py-1 text-left text-gray-600 whitespace-nowrap">
-                                                {(game.venue || "Venue TBD").trim()}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    ))
                 )}
             </div>
 
-            {/* Optional Debug info */}
             {process.env.NODE_ENV === 'development' && (
                 <div className="mt-4 p-2 border-t text-xs text-gray-500">
                     <p>Debug: {games.length} Mentone games fetched. {filteredGames.length} games shown after team filter. {selectedTeams.length} teams selected.</p>
