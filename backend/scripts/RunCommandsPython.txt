@@ -1,0 +1,8 @@
+python -m backend.scripts.extract_venues --creds "backend/secrets/serviceAccountKey.json" --verbose
+
+python -m backend.scripts.discover_players --creds "backend/secrets/serviceAccountKey.json" --verbose
+
+python -m backend.scripts.update_results --creds "backend/secrets/serviceAccountKey.json" --verbose
+
+python -m backend.scripts.discover_games --creds "backend/secrets/serviceAccountKey.json" --verbose
+
