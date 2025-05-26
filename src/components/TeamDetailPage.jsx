@@ -10,19 +10,23 @@ import FavoriteButton from "./common/FavoriteButton";
 // Base URL for your deployed API endpoint
 const API_BASE_URL = 'https://ladder-api-55xtnu7seq-uc.a.run.app'; // <-- YOUR CLOUD RUN URL
 
-// Helper function to format date (adjust timezone as needed)
+// Helper function to format date
 const formatGameDate = (timestamp) => {
     if (!timestamp?.toDate) return "Date TBD";
+    // No timezone conversion needed here if Firestore stores naive local time
     return timestamp.toDate().toLocaleDateString('en-AU', {
-        weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Australia/Melbourne'
+        weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+        // timeZone: 'Australia/Melbourne' // REMOVE or keep if you store UTC and WANT to display in Melb
     });
 };
 
-// Helper function to format time (adjust timezone as needed)
+// Helper function to format time
 const formatGameTime = (timestamp) => {
     if (!timestamp?.toDate) return "Time TBD";
+    // No timezone conversion needed here
     return timestamp.toDate().toLocaleTimeString('en-AU', {
-        hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Australia/Melbourne'
+        hour: '2-digit', minute: '2-digit', hour12: false
+        // timeZone: 'Australia/Melbourne' // REMOVE or keep
     });
 };
 
@@ -373,21 +377,28 @@ const TeamDetailPage = () => {
                                                         <div className="text-gray-600">{formatGameDate(game.date)}</div>
                                                         <div className="text-gray-500">{formatGameTime(game.date)}</div>
                                                     </div>
-                                                    {/* Venue */}
-                                                    <div className="md:col-span-3">
-                                                        <div className="font-medium text-gray-800 truncate" title={game.venue || 'Venue TBD'}>{game.venue || 'Venue TBD'}</div>
-                                                        <div className="text-gray-500">{game.venue_short || ''}</div>
+
+                                                    {/* Opponent, Score, and Venue Column (Centered) */}
+                                                    <div className="md:col-span-6 flex flex-col items-center text-center">
+                                                        <div className={`font-medium text-lg ${opponent?.club?.toLowerCase().includes("mentone") ? 'text-mentone-skyblue' : 'text-gray-800'}`}>
+                                                            {opponent?.name || 'Opponent TBD'}
+                                                        </div>
+                                                        <div className="font-bold text-2xl text-mentone-navy my-1">
+                                                            {scoreDisplay}
+                                                        </div>
+                                                        <div className="flex items-center text-xs text-mentone-charcoal mt-1">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                                                <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                                                            </svg>
+                                                            <span title={game.venue || 'Venue TBD'}>{game.venue || 'Venue TBD'} ({game.venue_code || ''})</span>
+                                                        </div>
                                                     </div>
-                                                    {/* Opponent & Score */}
-                                                    <div className="md:col-span-4 text-center md:text-left">
-                                                        <div className={`font-medium ${opponent?.club?.toLowerCase() === 'mentone' ? 'text-mentone-skyblue' : 'text-gray-800'}`}>{opponent?.name || 'Opponent TBD'}</div>
-                                                        <div className="font-bold text-lg text-mentone-navy mt-1">{scoreDisplay}</div>
-                                                    </div>
+
                                                     {/* Outcome & Details */}
-                                                    <div className="md:col-span-2 flex flex-col items-center md:items-end gap-2">
+                                                    <div className="md:col-span-3 flex flex-col items-center md:items-end gap-2">
                                                         {getOutcomeBadge(game, teamData.id)}
                                                         <a
-                                                            href={game.url || '#'} // Link to HV game detail page if available
+                                                            href={game.url || '#'}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className={`mt-1 px-3 py-1 text-xs rounded border transition-colors ${game.url ? 'border-mentone-skyblue text-mentone-skyblue hover:bg-mentone-skyblue/10' : 'border-gray-300 text-gray-400 cursor-not-allowed'}`}

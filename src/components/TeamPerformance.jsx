@@ -1,4 +1,3 @@
-// src/components/TeamPerformance.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
@@ -76,7 +75,6 @@ const TeamPerformance = () => {
                 try {
                     const gamesQuery = query(
                         collection(db, "games"),
-                        where("mentone_playing", "==", true),
                         where("status", "==", "completed"),
                         orderBy("date", "desc")
                     );
@@ -170,6 +168,7 @@ const TeamPerformance = () => {
             individualStats[team.fixture_id] = {
                 teamName: team.name.replace(/Mentone Hockey Club - |Mentone - /g, ""),
                 fixture_id: team.fixture_id,
+                teamId: team.id,
                 wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, gd: 0, gamesPlayed: 0,
                 position: ladderCache[team.fixture_id]?.position ?? null,
                 ladderPoints: ladderCache[team.fixture_id]?.points ?? null,
@@ -191,9 +190,16 @@ const TeamPerformance = () => {
             const awayScore = game.away_team?.score;
             if (typeof homeScore !== 'number' || typeof awayScore !== 'number') return;
 
-            const isMentoneHome = game.home_team?.club?.toLowerCase() === 'mentone';
-            const goalsFor = isMentoneHome ? homeScore : awayScore;
-            const goalsAgainst = isMentoneHome ? awayScore : homeScore;
+            const isCurrentTeamHome = game.home_team?.id === stats.teamId;
+            const isCurrentTeamAway = game.away_team?.id === stats.teamId;
+
+            if (!isCurrentTeamHome && !isCurrentTeamAway) {
+                console.warn(`Team ID ${stats.teamId} not found in game ${game.id}. Skipping.`);
+                return;
+            }
+
+            const goalsFor = isCurrentTeamHome ? homeScore : awayScore;
+            const goalsAgainst = isCurrentTeamHome ? awayScore : homeScore;
 
             stats.gamesPlayed += 1;
             stats.gf += goalsFor;
