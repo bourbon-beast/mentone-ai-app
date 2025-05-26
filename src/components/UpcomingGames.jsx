@@ -184,13 +184,13 @@ const UpcomingGames = () => {
     const formatGameDate = (date) => {
         if (!date) return "TBD";
         const gameDate = date instanceof Date ? date : new Date(date);
-        return gameDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' });
+        return gameDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' });
     };
 
     const formatGameTime = (date) => {
         if (!date) return "TBD";
         const gameDate = date instanceof Date ? date : new Date(date);
-        return gameDate.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
+        return gameDate.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false });
     };
 
     const generateHTMLTable = (roundGames, roundRangeText) => {
