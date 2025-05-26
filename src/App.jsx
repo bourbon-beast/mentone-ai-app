@@ -11,6 +11,7 @@ import TravelPlanner from './components/TravelPlanner';
 import VenueManager from './components/VenueManager';
 import MyTeams from './components/MyTeams';
 import Login from './components/Login'; // Import the Login component
+import AdminPanel from './components/AdminPanel'; // Import the AdminPanel component
 import { FavoritesProvider } from './context/FavoritesContext';
 import './App.css';
 
@@ -33,6 +34,7 @@ function App() {
                         <Route path="summary" element={<WeeklySummary />} />
                         <Route path="travel" element={<TravelPlanner />} />
                         <Route path="venues" element={<VenueManager />} />
+                        <Route path="admin" element={<AdminPanel />} /> {/* Add AdminPanel route */}
                     </Route>
                 </Routes>
             </BrowserRouter>
