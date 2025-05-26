@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useFavorites } from "../context/FavoritesContext";
+import { useAuth } from "../context/AuthContext"; // Add this
 import FavoriteButton from "./common/FavoriteButton";
 
 const MyTeams = () => {
-    const { favoriteTeams } = useFavorites();
+    const { favoriteTeams, loadingFavorites } = useFavorites(); // Add loadingFavorites
+    const { currentUser } = useAuth(); // Get currentUser
     const [filter, setFilter] = useState("all");
 
     // Group teams by type
@@ -28,6 +30,15 @@ const MyTeams = () => {
 
     // Get total count for "All" filter
     teamCounts["all"] = favoriteTeams.length;
+
+    if (loadingFavorites) {
+        return (
+            <div className="flex items-center justify-center h-64 bg-white rounded-xl shadow-sm">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-mentone-skyblue"></div>
+                <p className="ml-3 text-mentone-navy font-medium">Loading favorite teams...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -92,17 +103,34 @@ const MyTeams = () => {
 
             {/* Team list */}
             <div className="p-5">
-                {favoriteTeams.length === 0 ? (
+                {!currentUser && favoriteTeams.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 bg-gray-50 rounded-lg border border-gray-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 text-gray-300 mb-3">
+                            <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
+                        </svg>
+                        <p className="text-gray-500 font-medium">Login to view and manage your favorite teams</p>
+                        <p className="text-gray-400 text-sm mt-1">
+                            Your favorite teams will be stored and synced across sessions.
+                        </p>
+                        <Link
+                            to="/login" // Link to the login page
+                            className="mt-4 px-4 py-2 bg-mentone-skyblue text-white rounded-lg hover:bg-mentone-skyblue/90 transition-colors"
+                        >
+                            Login
+                        </Link>
+                    </div>
+                ) : currentUser && favoriteTeams.length === 0 ? (
+                    // This is the original "No favorite teams yet" message for logged-in users
                     <div className="flex flex-col items-center justify-center py-16 bg-gray-50 rounded-lg border border-gray-100">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 text-gray-300 mb-3">
                             <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
                         </svg>
                         <p className="text-gray-500 font-medium">No favorite teams yet</p>
                         <p className="text-gray-400 text-sm mt-1">
-                            Add teams to your favorites by clicking the star icon on any team card
+                            Add teams to your favorites by clicking the star icon on any team card.
                         </p>
                         <Link
-                            to="/teams"
+                            to="/teams" // Changed from /teams to / to align with Navbar, assuming / is teams list or similar
                             className="mt-4 px-4 py-2 bg-mentone-skyblue text-white rounded-lg hover:bg-mentone-skyblue/90 transition-colors"
                         >
                             Browse Teams
