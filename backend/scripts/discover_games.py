@@ -18,12 +18,13 @@ import time
 from datetime import datetime, timedelta
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
+import pytz
 
 # Import utility modules
 from backend.utils.firebase_init import initialize_firebase
 from backend.utils.request_utils import make_request, build_url
 from backend.utils.logging_utils import setup_logger
-from backend.utils.parsing_utils import clean_text, parse_date, extract_table_data, is_mentone_team
+from backend.utils.parsing_utils import clean_text, parse_date, extract_table_data, is_mentone_team, AUSTRALIA_TZ
 
 # Constants
 BASE_URL = "https://www.hockeyvictoria.org.au"
@@ -151,15 +152,24 @@ def discover_games_for_team(logger, team, days_ahead=DEFAULT_DAYS_AHEAD, session
                     clean_date_string = f"{day} {date} {month} {year} {time}"
 
                     try:
-                        # Parse the clean date string
-                        game_date = datetime.strptime(clean_date_string, "%a %d %b %Y %H:%M")
-                        logger.debug(f"Successfully parsed date: {game_date}")
-                    except ValueError as e:
-                        logger.warning(f"Could not parse date from cleaned string: '{clean_date_string}' - {e}")
-                        continue
+                        # Parse the clean date string using parse_date
+                        game_date = parse_date(clean_date_string, formats=["%a %d %b %Y %H:%M"], timezone=AUSTRALIA_TZ)
+                        if game_date:
+                            logger.debug(f"Successfully parsed date: {game_date}")
+                        else:
+                            # parse_date returned None, meaning parsing failed
+                            logger.warning(f"Could not parse date from cleaned string: '{clean_date_string}' using parse_date")
+                            continue # Skip this card
+                    except ValueError as e: # Should not happen if parse_date handles exceptions and returns None
+                        logger.error(f"ValueError during date parsing for '{clean_date_string}': {e}")
+                        continue # Skip this card
                 else:
+                    # This 'else' corresponds to 'if match:' - meaning the regex did not find a date/time pattern
                     logger.warning(f"Could not find date/time pattern in: '{date_time_text}'")
-                    continue
+                    continue # Skip this card
+
+                # At this point, game_date should be a valid datetime object, or we would have continued.
+                # No need for further 'if not game_date:' checks here.
 
                 # Extract venue
                 venue_div = card.select_one("div.col-md.pb-3.pb-lg-0.text-center.text-md-right.text-lg-left")
@@ -245,8 +255,8 @@ def discover_games_for_team(logger, team, days_ahead=DEFAULT_DAYS_AHEAD, session
                     "url": game_url,
                     "mentone_playing": mentone_playing,
                     "type": team.get("type"),
-                    "updated_at": datetime.now(),
-                    "created_at": datetime.now()
+                    "updated_at": datetime.now(pytz.utc),
+                    "created_at": datetime.now(pytz.utc)
                 }
 
                 # Add home team info
@@ -338,10 +348,28 @@ def create_or_update_game(db, game, dry_run=False):
                 ref_path = game[ref_field]["__ref__"]
                 game[ref_field] = db.document(ref_path)
 
-        # Convert date to Firestore timestamp
-        if isinstance(game.get("date"), datetime):
-            game["date"] = game["date"]
+        # Convert date to Firestore timestamp (UTC)
+        game_date_obj = game.get("date")
+        if isinstance(game_date_obj, datetime):
+            if game_date_obj.tzinfo is None:
+                # This case should ideally not happen if parsing is correct
+                logger.warning(f"Game date for {game.get('id')} is naive. Assuming Melbourne time and converting to UTC.")
+                game["date"] = AUSTRALIA_TZ.localize(game_date_obj).astimezone(pytz.utc)
+            else:
+                # If already timezone-aware, just ensure it's UTC
+                game["date"] = game_date_obj.astimezone(pytz.utc)
 
+        # Ensure updated_at and created_at are also UTC
+        for field_name in ["updated_at", "created_at"]:
+            date_obj = game.get(field_name)
+            if isinstance(date_obj, datetime):
+                if date_obj.tzinfo is None:
+                    # This case should ideally not happen
+                    logger.warning(f"Field {field_name} for {game.get('id')} is naive. Assuming UTC.")
+                    game[field_name] = pytz.utc.localize(date_obj)
+                else:
+                    game[field_name] = date_obj.astimezone(pytz.utc)
+        
         # Write to Firestore
         game_ref = db.collection("games").document(game_id)
         game_ref.set(game, merge=True)

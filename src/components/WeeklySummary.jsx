@@ -101,7 +101,7 @@ const WeeklySummary = () => {
             // Add each game result
             typeGames.forEach(game => {
                 const date = game.date?.toDate ? game.date.toDate() : new Date(game.date);
-                const dateStr = date.toLocaleDateString("en-AU", { weekday: 'short', day: 'numeric', month: 'short' });
+                const dateStr = date.toLocaleDateString("en-AU", { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
                 const homeTeam = game.home_team?.name || "Unknown";
                 const awayTeam = game.away_team?.name || "Unknown";
