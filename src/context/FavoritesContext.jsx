@@ -1,4 +1,15 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useAuth } from './AuthContext'; // Assuming AuthContext.jsx is in the same directory
+import { db } from '../firebase'; // Firebase config
+import {
+    collection,
+    doc,
+    getDocs,
+    setDoc,
+    deleteDoc,
+    query,
+    where, // Only if needed for specific queries, not for basic get all favorites by UID
+} from 'firebase/firestore';
 
 // Create the favorites context
 const FavoritesContext = createContext();
@@ -14,72 +25,113 @@ export const useFavorites = () => {
 
 // Provider component
 export const FavoritesProvider = ({ children }) => {
-    // State to store favorite teams
+    const { currentUser } = useAuth();
     const [favoriteTeams, setFavoriteTeams] = useState([]);
-    // State to track if we're filtering to show only favorites
+    const [loadingFavorites, setLoadingFavorites] = useState(true); // To track loading state
     const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
 
-    // Load favorites from localStorage on component mount
+    // Function to get the path to the user's favorites collection
+    const getFavoritesCollectionRef = useCallback(() => {
+        if (!currentUser) return null;
+        return collection(db, 'users', currentUser.uid, 'favorites');
+    }, [currentUser]);
+
+    // Load favorites from Firestore when currentUser changes
     useEffect(() => {
-        const storedFavorites = localStorage.getItem('mentone_favorite_teams');
-        if (storedFavorites) {
-            try {
-                setFavoriteTeams(JSON.parse(storedFavorites));
-            } catch (error) {
-                console.error('Error parsing stored favorites:', error);
-                // If there's an error parsing, reset favorites
-                localStorage.removeItem('mentone_favorite_teams');
+        if (currentUser) {
+            setLoadingFavorites(true);
+            const favoritesColRef = getFavoritesCollectionRef();
+            if (!favoritesColRef) { // Should not happen if currentUser is set, but good check
+                setFavoriteTeams([]);
+                setLoadingFavorites(false);
+                return;
             }
-        }
-    }, []);
 
-    // Save favorites to localStorage whenever they change
-    useEffect(() => {
-        localStorage.setItem('mentone_favorite_teams', JSON.stringify(favoriteTeams));
-    }, [favoriteTeams]);
-
-    // Function to add a team to favorites
-    const addFavorite = (team) => {
-        // Check if team is already in favorites to avoid duplicates
-        if (!favoriteTeams.some(fav => fav.id === team.id)) {
-            setFavoriteTeams([...favoriteTeams, team]);
-        }
-    };
-
-    // Function to remove a team from favorites
-    const removeFavorite = (teamId) => {
-        setFavoriteTeams(favoriteTeams.filter(team => team.id !== teamId));
-    };
-
-    // Function to toggle a team's favorite status
-    const toggleFavorite = (team) => {
-        if (favoriteTeams.some(fav => fav.id === team.id)) {
-            removeFavorite(team.id);
+            getDocs(favoritesColRef)
+                .then((querySnapshot) => {
+                    const userFavorites = [];
+                    querySnapshot.forEach((doc) => {
+                        // Assuming the document ID is the teamId and the document data is the team object
+                        userFavorites.push({ id: doc.id, ...doc.data() });
+                    });
+                    setFavoriteTeams(userFavorites);
+                })
+                .catch((error) => {
+                    console.error('Error fetching favorite teams:', error);
+                    setFavoriteTeams([]); // Reset on error
+                })
+                .finally(() => {
+                    setLoadingFavorites(false);
+                });
         } else {
-            addFavorite(team);
+            // No user, clear favorites and stop loading
+            setFavoriteTeams([]);
+            setLoadingFavorites(false);
+        }
+    }, [currentUser, getFavoritesCollectionRef]);
+    
+    // toggleFavorite function
+    const toggleFavorite = async (team) => {
+        if (!currentUser) {
+            console.log('User not logged in. Cannot modify favorites.');
+            // Optionally, trigger a UI notification or login prompt here
+            return;
+        }
+
+        if (!team || !team.id) {
+            console.error('Invalid team object passed to toggleFavorite');
+            return;
+        }
+
+        const favoritesColRef = getFavoritesCollectionRef();
+        if (!favoritesColRef) return; // Should not happen
+
+        const teamDocRef = doc(favoritesColRef, String(team.id)); // Ensure team.id is a string for doc path
+
+        const isCurrentlyFavorite = favoriteTeams.some(fav => fav.id === team.id);
+
+        try {
+            if (isCurrentlyFavorite) {
+                // Remove from favorites
+                await deleteDoc(teamDocRef);
+                setFavoriteTeams(prevFavorites => prevFavorites.filter(fav => fav.id !== team.id));
+            } else {
+                // Add to favorites
+                // We store the whole team object. Make sure it's clean (no undefined, etc.)
+                // Firestore can't store undefined values directly.
+                // Create a copy of the team object to ensure it's clean
+                const teamDataToSave = { ...team }; 
+                // Example: remove any problematic fields if necessary before saving
+                // delete teamDataToSave.someProblematicField; 
+
+                await setDoc(teamDocRef, teamDataToSave);
+                setFavoriteTeams(prevFavorites => [...prevFavorites, teamDataToSave]);
+            }
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+            // Handle error (e.g., show notification)
         }
     };
 
-    // Function to check if a team is a favorite
     const isFavorite = (teamId) => {
         return favoriteTeams.some(team => team.id === teamId);
     };
 
-    // Toggle the filter to show only favorites
     const toggleShowOnlyFavorites = () => {
         setShowOnlyFavorites(prev => !prev);
     };
-
-    // The context value that will be provided
+    
     const value = {
         favoriteTeams,
+        loadingFavorites, // Expose loading state for UI
         showOnlyFavorites,
-        addFavorite,
-        removeFavorite,
         toggleFavorite,
         isFavorite,
         toggleShowOnlyFavorites,
-        setShowOnlyFavorites
+        setShowOnlyFavorites,
+        // addFavorite and removeFavorite are effectively replaced by toggleFavorite
+        // but can be kept if direct add/remove is needed elsewhere,
+        // though they would also need to be updated for Firestore.
     };
 
     return (

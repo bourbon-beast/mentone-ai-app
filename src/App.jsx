@@ -9,7 +9,8 @@ import PlayerStats from './components/PlayerStats';
 import WeeklySummary from './components/WeeklySummary';
 import TravelPlanner from './components/TravelPlanner';
 import VenueManager from './components/VenueManager';
-import MyTeams from './components/MyTeams'; // Import the new MyTeams component
+import MyTeams from './components/MyTeams';
+import Login from './components/Login'; // Import the Login component
 import { FavoritesProvider } from './context/FavoritesContext';
 import './App.css';
 
@@ -18,25 +19,19 @@ function App() {
         <FavoritesProvider>
             <BrowserRouter>
                 <Routes>
-                    {/* Wrap all main routes in the Layout */}
+                    {/* Route for the Login page - does not use the main Layout */}
+                    <Route path="/login" element={<Login />} /> 
+                    
+                    {/* Main application routes with Layout */}
                     <Route path="/" element={<Layout />}>
-                        {/* Index route for "/" (UpcomingGames) */}
                         <Route index element={<UpcomingGames />} />
-                        {/* Route for the Teams List */}
                         <Route path="teams" element={<TeamList />} />
-                        {/* Route for a specific Team Detail Page */}
                         <Route path="teams/:teamId" element={<TeamDetailPage />} />
-                        {/* Route for My Teams page */}
                         <Route path="my-teams" element={<MyTeams />} />
-                        {/* Route for Performance */}
                         <Route path="performance" element={<TeamPerformance />} />
-                        {/* Route for Player Stats */}
                         <Route path="players" element={<PlayerStats />} />
-                        {/* Route for Weekly Summary */}
                         <Route path="summary" element={<WeeklySummary />} />
-                        {/* Route for Travel Planner */}
                         <Route path="travel" element={<TravelPlanner />} />
-                        {/* Route for Venue Manager */}
                         <Route path="venues" element={<VenueManager />} />
                     </Route>
                 </Routes>
