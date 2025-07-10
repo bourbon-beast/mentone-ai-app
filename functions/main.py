@@ -18,8 +18,8 @@ from update_ladder_cf import update_ladder_cf
 from update_results_cf import update_results_cf
 
 # Export existing functions
-# ladder_api = ladder_api # Retained as is from original, though direct use of imported name is also fine
-# calculate_travel_time = calculate_travel_time # Retained as is
+ladder_api = ladder_api
+calculate_travel_time = calculate_travel_time
 
 # Export new functions with specified endpoint names
 discover_competitions = discover_competitions_cf
