@@ -1,12 +1,35 @@
-# React + Vite
+# Mentone Hockey Club Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This project is a web application designed to serve as a comprehensive dashboard for the Mentone Hockey Club. It provides easy access to information about teams, upcoming games, match results, player statistics, ladder positions, and tools for travel planning and venue management.
 
-Currently, two official plugins are available:
+The application is built with a modern JavaScript frontend and a Python backend that handles data acquisition and processing.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Project Structure
 
-## Expanding the ESLint configuration
+The project is organized into two main parts:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+*   **Frontend (`src/`):** A React application built with Vite and styled with Tailwind CSS. It interacts with Firebase services to fetch and display data. More details can be found in [`src/README.md`](./src/README.md).
+*   **Backend (`backend/` and `functions/`):**
+    *   The `backend/` directory contains Python scripts responsible for scraping data from sources like Hockey Victoria, processing this data, and storing it in Firebase Firestore.
+    *   The `functions/` directory contains Firebase Cloud Functions written in Python that provide API endpoints for the frontend application.
+    *   More details about the backend setup and operations can be found in [`backend/README.md`](./backend/README.md).
+
+## Key Features
+
+*   View upcoming games and schedules.
+*   Browse teams and detailed team information.
+*   Track team performance and ladder standings.
+*   Access player statistics.
+*   Get weekly summaries of club activities.
+*   Plan travel to game venues.
+*   Manage venue information.
+
+## Technologies Used
+
+*   **Frontend:** React, Vite, JavaScript, Tailwind CSS, Firebase (Authentication, Firestore)
+*   **Backend:** Python, Firebase (Firestore, Cloud Functions)
+*   **Deployment:** Firebase Hosting (frontend), Firebase Cloud Functions (backend APIs)
+
+## Getting Started
+
+To get started with development, please refer to the README files in the respective `src/` (for frontend) and `backend/` directories.
