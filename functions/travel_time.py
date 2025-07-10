@@ -1,10 +1,17 @@
-import functions_framework
-from flask import jsonify, request
-import requests
+import json
 import os
 import logging
-from google.cloud import firestore
-import json
+import requests
+
+import firebase_admin
+from firebase_admin import initialize_app, firestore
+from firebase_functions import https_fn
+
+# Initialize Firebase
+try:
+    firebase_admin.get_app()
+except ValueError:
+    initialize_app()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -16,30 +23,30 @@ logger = logging.getLogger(__name__)
 # GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
 
-@functions_framework.http
-def calculate_travel_time(request):
+@https_fn.on_request()
+def calculate_travel_time(req: https_fn.Request) -> https_fn.Response:
     """
     HTTP Cloud Function that calculates travel time between two venues
     using Google Maps Distance Matrix API.
 
     Args:
-        request: The request object with origin and destination
+        req: The incoming HTTP request
 
     Returns:
         JSON response with travel details
     """
     # Initialize Firestore
-    db = firestore.Client()
+    db = firestore.client()
 
     # Set CORS headers for preflight requests
-    if request.method == 'OPTIONS':
+    if req.method == 'OPTIONS':
         headers = {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST',
             'Access-Control-Allow-Headers': 'Content-Type',
             'Access-Control-Max-Age': '3600'
         }
-        return ('', 204, headers)
+        return https_fn.Response('', status=204, headers=headers)
 
     # Set CORS headers for the main request
     headers = {'Access-Control-Allow-Origin': '*'}
@@ -48,11 +55,16 @@ def calculate_travel_time(request):
     api_key = GOOGLE_MAPS_API_KEY
     if not api_key:
         logger.error("Google Maps API key not configured")
-        return (jsonify({'error': 'API key not configured'}), 500, headers)
+        return https_fn.Response(
+            json.dumps({'error': 'API key not configured'}),
+            status=500,
+            mimetype='application/json',
+            headers=headers
+        )
 
     # Parse request
     try:
-        request_json = request.get_json(silent=True)
+    request_json = req.get_json(silent=True)
 
         if request_json:
             # JSON request
@@ -62,23 +74,28 @@ def calculate_travel_time(request):
             units = request_json.get('units', 'metric')
         else:
             # Query parameters
-            origin = request.args.get('origin')
-            destination = request.args.get('destination')
-            mode = request.args.get('mode', 'driving')
-            units = request.args.get('units', 'metric')
+            origin = req.args.get('origin')
+            destination = req.args.get('destination')
+            mode = req.args.get('mode', 'driving')
+            units = req.args.get('units', 'metric')
 
             # Special handling for venue IDs/codes instead of addresses
-            origin_venue_id = request.args.get('origin_venue_id')
+            origin_venue_id = req.args.get('origin_venue_id')
             if origin_venue_id and not origin:
                 origin = get_venue_address(origin_venue_id)
 
-            destination_venue_id = request.args.get('destination_venue_id')
+            destination_venue_id = req.args.get('destination_venue_id')
             if destination_venue_id and not destination:
                 destination = get_venue_address(destination_venue_id)
 
         # Validate required parameters
         if not origin or not destination:
-            return (jsonify({'error': 'Origin and destination are required'}), 400, headers)
+            return https_fn.Response(
+                json.dumps({'error': 'Origin and destination are required'}),
+                status=400,
+                mimetype='application/json',
+                headers=headers
+            )
 
         # Add Victoria, Australia if not included
         if 'australia' not in origin.lower() and 'vic' not in origin.lower():
@@ -104,19 +121,27 @@ def calculate_travel_time(request):
         # Handle API error responses
         if data.get('status') != 'OK':
             logger.error(f"Google Maps API error: {data.get('status')}")
-            return (jsonify({
-                'error': f"Google Maps API error: {data.get('status')}",
-                'details': data.get('error_message', 'No details available')
-            }), 500, headers)
+            return https_fn.Response(
+                json.dumps({
+                    'error': f"Google Maps API error: {data.get('status')}",
+                    'details': data.get('error_message', 'No details available')
+                }),
+                status=500,
+                mimetype='application/json',
+                headers=headers
+            )
 
         # Process results
         try:
             elements = data['rows'][0]['elements'][0]
 
             if elements['status'] != 'OK':
-                return (jsonify({
-                    'error': f"Route calculation error: {elements['status']}"
-                }), 400, headers)
+                return https_fn.Response(
+                    json.dumps({'error': f"Route calculation error: {elements['status']}"}),
+                    status=400,
+                    mimetype='application/json',
+                    headers=headers
+                )
 
             # Return travel information
             result = {
@@ -135,18 +160,30 @@ def calculate_travel_time(request):
             # Cache the result in Firestore for future use
             cache_travel_data(origin, destination, result)
 
-            return (jsonify(result), 200, headers)
+            return https_fn.Response(
+                json.dumps(result),
+                status=200,
+                mimetype='application/json',
+                headers=headers
+            )
 
         except (KeyError, IndexError) as e:
             logger.error(f"Error parsing Google Maps API response: {str(e)}")
-            return (jsonify({
-                'error': 'Error parsing API response',
-                'details': str(e)
-            }), 500, headers)
+            return https_fn.Response(
+                json.dumps({'error': 'Error parsing API response', 'details': str(e)}),
+                status=500,
+                mimetype='application/json',
+                headers=headers
+            )
 
     except Exception as e:
         logger.exception("Error calculating travel time")
-        return (jsonify({'error': str(e)}), 500, headers)
+        return https_fn.Response(
+            json.dumps({'error': str(e)}),
+            status=500,
+            mimetype='application/json',
+            headers=headers
+        )
 
 def get_venue_address(venue_id):
     """
