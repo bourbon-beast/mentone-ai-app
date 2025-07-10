@@ -2,15 +2,15 @@
 
 This project is a web application designed to serve as a comprehensive dashboard for the Mentone Hockey Club. It provides easy access to information about teams, upcoming games, match results, player statistics, ladder positions, and tools for travel planning and venue management.
 
-The application is built with a modern JavaScript frontend and Python Cloud Functions that handle data acquisition and processing.
+The application is built with a modern JavaScript frontend and a Python backend powered by FastAPI for data acquisition and processing.
 
 ## Project Structure
 
 The project is organized into two main parts:
 
 *   **Frontend (`src/`):** A React application built with Vite and styled with Tailwind CSS. It interacts with Firebase services to fetch and display data. More details can be found in [`src/README.md`](./src/README.md).
-*   **Backend (`functions/`):**
-    *   The `functions/` directory contains Firebase Cloud Functions written in Python. These functions scrape data from sources like Hockey Victoria, process it, store it in Firebase Firestore, and expose API endpoints for the frontend application.
+*   **Backend (`backend/`):**
+    *   The `backend/` directory contains a FastAPI application. It reuses the existing scraping logic to populate Firestore and exposes HTTP endpoints that can be deployed as a container.
 
 ## Key Features
 
@@ -25,9 +25,22 @@ The project is organized into two main parts:
 ## Technologies Used
 
 *   **Frontend:** React, Vite, JavaScript, Tailwind CSS, Firebase (Authentication, Firestore)
-*   **Backend:** Python, Firebase (Firestore, Cloud Functions)
-*   **Deployment:** Firebase Hosting (frontend), Firebase Cloud Functions (backend APIs)
+*   **Backend:** Python, FastAPI, Firebase (Firestore)
+*   **Deployment:** Firebase Hosting (frontend), containerized FastAPI app for backend APIs
 
 ## Getting Started
 
-To get started with development, please refer to the README files in the `src/` directory for the frontend and the `functions/` directory for backend Cloud Functions.
+To get started with development, please refer to the README files in the `src/` directory for the frontend and the `backend/` directory for the FastAPI service.
+
+### Backend Development
+
+To run the FastAPI backend locally:
+```bash
+pip install -r backend/requirements.txt
+uvicorn backend.app:app --reload
+```
+You can build a container for deployment using:
+```bash
+docker build -t mentone-hockey .
+```
+
