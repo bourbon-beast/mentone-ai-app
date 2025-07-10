@@ -521,8 +521,8 @@ const UpcomingGames = () => {
                                         <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Date</th>
                                         <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Time</th>
                                         <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Competition</th>
-                                        <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Opponent</th>
                                         <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Venue</th>
+                                        <th className="px-2 py-1 text-left font-medium text-gray-500 uppercase">Versus</th>
                                     </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -535,8 +535,9 @@ const UpcomingGames = () => {
                                                 <td className="px-2 py-1 text-left text-gray-600 whitespace-nowrap">{formatGameDate(game.date)}</td>
                                                 <td className="px-2 py-1 text-left text-gray-600 whitespace-nowrap">{formatGameTime(game.date)}</td>
                                                 <td className="px-2 py-1 text-left text-gray-800 whitespace-nowrap">{competitionName}</td>
-                                                <td className="px-2 py-1 text-left text-gray-800 whitespace-nowrap">{opponentName}</td>
                                                 <td className="px-2 py-1 text-left text-gray-600 whitespace-nowrap">{(game.venue || "Venue TBD").trim()}</td>
+                                                <td className="px-2 py-1 text-left text-gray-800 whitespace-nowrap">{opponentName}</td>
+
                                             </tr>
                                         );
                                     })}
