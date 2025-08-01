@@ -1,7 +1,19 @@
-firebase-functions>=0.1.0
+# Core dependencies
 firebase-admin>=6.2.0
-beautifulsoup4>=4.12.0
+firebase-functions>=0.1.0
 requests>=2.28.0
-pytz>=2024.1
-fastapi>=0.111.0
-uvicorn>=0.29.0
+beautifulsoup4>=4.12.0
+pytz>=2023.3
+
+# FastAPI and web server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Optional dependencies
+grpcio>=1.56.0  # For better Firebase performance
+cachetools>=5.3.1  # For caching results
+python-dateutil>=2.8.2  # For date handling
+flask>=2.3.0
+fastapi>=0.104.0
+uvicorn>=0.24.0

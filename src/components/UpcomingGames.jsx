@@ -303,7 +303,7 @@ const UpcomingGames = () => {
     return (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="bg-gradient-to-r from-mentone-navy to-mentone-navy/90 p-5 flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-mentone-gold tracking-tight">Upcoming Games</h2>
+                <h2 className="text-2xl font-bold text-mentone-gold tracking-tight">Upcoming fixtures</h2>
                 <div className="bg-mentone-navy/50 backdrop-blur-sm rounded-lg p-1 flex">
                     {[
                         { value: "thisWeek", label: "This Round" },
